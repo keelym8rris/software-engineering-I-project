@@ -1,0 +1,80 @@
+@page "/"
+@rendermode InteractiveServer
+@inject NavigationManager Nav
+@inject LobbyPrototypeService Lobby
+
+<PageTitle>Blackjack · Home</PageTitle>
+
+<section class="hero-grid">
+    <div class="hero-copy">
+        <span class="eyebrow">MULTIPLAYER BLACKJACK</span>
+        <h1>Pull up a chair.<br />The table is open.</h1>
+        <p class="lede">A polished starter for hosted blackjack lobbies, player stats, house rules, and server-authoritative gameplay.</p>
+
+        <div class="name-card panel">
+            <label for="displayName">Display name</label>
+            <div class="inline-control">
+                <input id="displayName" @bind="displayName" maxlength="24" placeholder="Enter a name" />
+                <button class="button subtle" @onclick="SaveName">Save</button>
+            </div>
+        </div>
+
+        <div class="hero-actions">
+            <button class="button primary large" @onclick="() => Nav.NavigateTo(\"/host\")">Host a table</button>
+            <button class="button secondary large" @onclick="() => Nav.NavigateTo(\"/join\")">Join with code</button>
+        </div>
+    </div>
+
+    <aside class="table-preview panel">
+        <div class="table-felt">
+            <span class="table-label">BLACKJACK PAYS 3 TO 2</span>
+            <div class="card-fan" aria-hidden="true">
+                <div class="playing-card red-card">A<span>♥</span></div>
+                <div class="playing-card dark-card">K<span>♠</span></div>
+            </div>
+            <div class="dealer-chip">DEALER</div>
+        </div>
+    </aside>
+</section>
+
+<section class="dashboard-grid">
+    <article class="panel stat-panel">
+        <div class="panel-heading"><span>Player profile</span><span class="muted">prototype</span></div>
+        <h2>@Lobby.DisplayName</h2>
+        <div class="stat-row"><span>Games played</span><strong>0</strong></div>
+        <div class="stat-row"><span>Wins</span><strong>0</strong></div>
+        <div class="stat-row"><span>Best streak</span><strong>—</strong></div>
+        <button class="text-button" disabled>Member login · coming later</button>
+    </article>
+
+    <article class="panel">
+        <div class="panel-heading"><span>Available games</span><span class="live-badge">1 live</span></div>
+        <div class="game-list-item">
+            <div class="game-icon">21</div>
+            <div><strong>Blackjack</strong><p>2–8 players · custom house rules</p></div>
+            <span class="tag">Ready</span>
+        </div>
+        <div class="game-list-item disabled-row">
+            <div class="game-icon ghost">?</div>
+            <div><strong>More table games</strong><p>Architecture leaves room for future games.</p></div>
+            <span class="tag">Later</span>
+        </div>
+    </article>
+
+    <article class="panel credits-panel">
+        <div class="panel-heading"><span>Project</span><span class="muted">SE I</span></div>
+        <h3>Built as a team.</h3>
+        <p>This starter intentionally leaves multiplayer transport, persistence, authentication, and final blackjack rules for your team to implement.</p>
+        <div class="tech-stack"><span>C#</span><span>Blazor</span><span>.NET 9</span><span>GitHub</span></div>
+    </article>
+</section>
+
+@code {
+    private string displayName = "Guest";
+    protected override void OnInitialized() => displayName = Lobby.DisplayName;
+    private void SaveName()
+    {
+        Lobby.DisplayName = string.IsNullOrWhiteSpace(displayName) ? "Guest" : displayName.Trim();
+        displayName = Lobby.DisplayName;
+    }
+}

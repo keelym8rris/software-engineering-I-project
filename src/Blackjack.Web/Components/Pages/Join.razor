@@ -1,0 +1,53 @@
+@page "/join"
+@rendermode InteractiveServer
+@inject NavigationManager Nav
+@inject LobbyPrototypeService Lobby
+
+<PageTitle>Join a Lobby</PageTitle>
+
+<section class="center-stage">
+    <div class="panel form-panel narrow">
+        <span class="eyebrow">JOIN A TABLE</span>
+        <h1>Enter your lobby code.</h1>
+        <p class="lede compact">Ask the host for the six-character code shown in their pre-game lobby.</p>
+
+        <label for="joinName">Display name</label>
+        <input id="joinName" @bind="displayName" maxlength="24" placeholder="Your name" />
+
+        <label for="joinCode">Lobby code</label>
+        <input id="joinCode" class="code-input" @bind="joinCode" maxlength="8" placeholder="ABC123" />
+
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+            <div class="notice">@message</div>
+        }
+
+        <div class="stack-actions">
+            <button class="button primary large" @onclick="JoinLobby">Join lobby</button>
+            <a class="button ghost" href="/">Back home</a>
+        </div>
+
+        <p class="helper-text">Prototype note: this currently simulates joining locally. The real hosted-lobby lookup will replace this handler later.</p>
+    </div>
+</section>
+
+@code {
+    private string displayName = "";
+    private string joinCode = "";
+    private string message = "";
+
+    protected override void OnInitialized() => displayName = Lobby.DisplayName;
+
+    private void JoinLobby()
+    {
+        if (string.IsNullOrWhiteSpace(joinCode))
+        {
+            message = "Enter a lobby code first.";
+            return;
+        }
+
+        Lobby.DisplayName = string.IsNullOrWhiteSpace(displayName) ? "Guest" : displayName.Trim();
+        Lobby.AddPrototypePlayer(Lobby.DisplayName);
+        Nav.NavigateTo("/lobby");
+    }
+}

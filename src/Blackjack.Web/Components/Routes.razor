@@ -1,0 +1,16 @@
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(Layout.MainLayout)">
+            <section class="panel empty-state">
+                <span class="eyebrow">404</span>
+                <h1>That table doesn't exist.</h1>
+                <p>Head back home and start a new game.</p>
+                <a class="button primary" href="/">Return home</a>
+            </section>
+        </LayoutView>
+    </NotFound>
+</Router>

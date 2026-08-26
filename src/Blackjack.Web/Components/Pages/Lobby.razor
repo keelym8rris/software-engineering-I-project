@@ -1,0 +1,42 @@
+@page "/lobby"
+@rendermode InteractiveServer
+@inject NavigationManager Nav
+@inject LobbyPrototypeService Lobby
+
+<PageTitle>Lobby</PageTitle>
+
+<section class="page-heading lobby-heading">
+    <div><span class="eyebrow">PRE-GAME LOBBY</span><h1>Your table is almost ready.</h1><p class="lede compact">Share the code, wait for everyone to arrive, then start when the table is ready.</p></div>
+    <div class="code-card"><span>JOIN CODE</span><strong>@Lobby.JoinCode</strong><small>Share this with your players</small></div>
+</section>
+
+<div class="lobby-grid">
+    <section class="panel">
+        <div class="panel-heading"><span>Players</span><span>@Lobby.Players.Count / @Lobby.Settings.MaxPlayers</span></div>
+        <div class="player-list">
+            @foreach (var player in Lobby.Players)
+            {
+                <div class="player-row">
+                    <div class="avatar">@player.DisplayName[..1].ToUpperInvariant()</div>
+                    <div class="player-meta"><strong>@player.DisplayName</strong><span>@(player.IsHost ? "Host" : "Player")</span></div>
+                    <span class="ready-state @(player.IsReady ? "ready" : "waiting")">@(player.IsReady ? "Ready" : "Waiting")</span>
+                </div>
+            }
+            @for (var i = Lobby.Players.Count; i < Lobby.Settings.MaxPlayers; i++)
+            {
+                <div class="player-row empty-player"><div class="avatar">+</div><div class="player-meta"><strong>Open seat</strong><span>Waiting for player</span></div></div>
+            }
+        </div>
+    </section>
+
+    <aside class="panel lobby-summary">
+        <div class="panel-heading"><span>Table settings</span><a href="/host">Edit</a></div>
+        <div class="summary-item"><span>Game</span><strong>@Lobby.Settings.GameName</strong></div>
+        <div class="summary-item"><span>Starting bankroll</span><strong>$@Lobby.Settings.StartingBankroll</strong></div>
+        <div class="summary-item"><span>Minimum bet</span><strong>$@Lobby.Settings.MinimumBet</strong></div>
+        <div class="summary-item"><span>Dealer soft 17</span><strong>@(Lobby.Settings.DealerHitsSoft17 ? "Hits" : "Stands")</strong></div>
+        <div class="summary-item"><span>Double after split</span><strong>@(Lobby.Settings.DoubleAfterSplit ? "On" : "Off")</strong></div>
+        <button class="button primary large full" @onclick="() => Nav.NavigateTo(\"/game\")">Start game</button>
+        <p class="helper-text">Prototype: host authorization and synchronized ready states are TODOs.</p>
+    </aside>
+</div>

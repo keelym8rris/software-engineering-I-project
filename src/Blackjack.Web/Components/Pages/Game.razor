@@ -1,0 +1,50 @@
+@page "/game"
+@rendermode InteractiveServer
+@inject NavigationManager Nav
+@inject LobbyPrototypeService Lobby
+
+<PageTitle>Blackjack Table</PageTitle>
+
+<section class="game-shell">
+    <div class="game-topline">
+        <div><span class="eyebrow">LIVE TABLE</span><h1>Blackjack</h1></div>
+        <div class="round-info"><span>Round</span><strong>01</strong></div>
+        <button class="button danger" @onclick="() => Nav.NavigateTo(\"/lobby\")">End game</button>
+    </div>
+
+    <div class="blackjack-table panel">
+        <div class="dealer-area">
+            <span class="seat-label">Dealer</span>
+            <div class="hand-row"><div class="playing-card dark-card">K<span>♠</span></div><div class="playing-card card-back">21</div></div>
+            <div class="hand-total">Showing 10</div>
+        </div>
+
+        <div class="table-center-mark">BLACKJACK <small>PAYS 3 TO 2</small></div>
+
+        <div class="players-on-table">
+            @foreach (var player in Lobby.Players)
+            {
+                <div class="table-seat @(player.IsHost ? "active-seat" : "")">
+                    <div class="mini-hand"><div class="mini-card">A♥</div><div class="mini-card">7♣</div></div>
+                    <strong>@player.DisplayName</strong>
+                    <span>$@player.Bankroll</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="game-controls panel">
+        <div class="bet-summary"><span>Your bet</span><strong>$@Lobby.Settings.MinimumBet</strong></div>
+        <div class="control-actions">
+            <button class="button secondary">Hit</button>
+            <button class="button secondary">Stand</button>
+            <button class="button ghost">Double</button>
+            <button class="button ghost">Split</button>
+        </div>
+        <div class="turn-indicator"><span class="status-dot"></span> Prototype turn</div>
+    </div>
+
+    <div class="implementation-banner">
+        <strong>Engineering handoff:</strong> these controls are intentionally visual only. Add a server-authoritative game engine, legal-action validation, deck/shuffle state, synchronized rounds, elimination logic, and host-only end-game behavior here.
+    </div>
+</section>
