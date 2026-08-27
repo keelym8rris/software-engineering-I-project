@@ -6,8 +6,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Prototype-only in-memory lobby state. Replace with a real multiplayer service later.
-builder.Services.AddSingleton<LobbyPrototypeService>();
+// Shared server-side registry for local prototype lobbies.
+builder.Services.AddSingleton<InMemoryLobbyService>();
+builder.Services.AddSingleton<BlackjackGameService>();
+
+// One session object per Blazor circuit/browser connection.
+builder.Services.AddScoped<PlayerSessionService>();
 
 var app = builder.Build();
 
