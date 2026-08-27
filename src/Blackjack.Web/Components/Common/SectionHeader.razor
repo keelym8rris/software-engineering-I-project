@@ -1,0 +1,34 @@
+@if (!string.IsNullOrWhiteSpace(Kicker) || !string.IsNullOrWhiteSpace(Title) || !string.IsNullOrWhiteSpace(Description))
+{
+    <header class="section-header @(Compact ? "section-header-compact" : "")">
+        <div>
+            @if (!string.IsNullOrWhiteSpace(Kicker))
+            {
+                <span class="eyebrow">@Kicker</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(Title))
+            {
+                <h1>@Title</h1>
+            }
+            @if (!string.IsNullOrWhiteSpace(Description))
+            {
+                <p class="lede @(Compact ? "compact" : string.Empty)">@Description</p>
+            }
+        </div>
+
+        @if (ChildContent is not null)
+        {
+            <div class="section-header-aside">
+                @ChildContent
+            </div>
+        }
+    </header>
+}
+
+@code {
+    [Parameter] public string? Kicker { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

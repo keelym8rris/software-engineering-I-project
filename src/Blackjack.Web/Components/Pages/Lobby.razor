@@ -6,8 +6,16 @@
 <PageTitle>Lobby</PageTitle>
 
 <section class="page-heading lobby-heading">
-    <div><span class="eyebrow">PRE-GAME LOBBY</span><h1>Your table is almost ready.</h1><p class="lede compact">Share the code, wait for everyone to arrive, then start when the table is ready.</p></div>
-    <div class="code-card"><span>JOIN CODE</span><strong>@LobbyService.JoinCode</strong><small>Share this with your players</small></div>
+    <div>
+        <span class="eyebrow">PRE-GAME LOBBY</span>
+        <h1>Your table is almost ready.</h1>
+        <p class="lede compact">Share the code, wait for everyone to arrive, then start when the table is ready.</p>
+    </div>
+    <div class="code-card">
+        <span>JOIN CODE</span>
+        <strong>@LobbyService.JoinCode</strong>
+        <small>Share this with your players</small>
+    </div>
 </section>
 
 <div class="lobby-grid">
@@ -18,13 +26,19 @@
             {
                 <div class="player-row">
                     <div class="avatar">@player.DisplayName[..1].ToUpperInvariant()</div>
-                    <div class="player-meta"><strong>@player.DisplayName</strong><span>@(player.IsHost ? "Host" : "Player")</span></div>
+                    <div class="player-meta">
+                        <strong>@player.DisplayName</strong>
+                        <span>@(player.IsHost ? "Host" : "Player") · $@player.Bankroll bankroll</span>
+                    </div>
                     <span class="ready-state @(player.IsReady ? "ready" : "waiting")">@(player.IsReady ? "Ready" : "Waiting")</span>
                 </div>
             }
             @for (var i = LobbyService.Players.Count; i < LobbyService.Settings.MaxPlayers; i++)
             {
-                <div class="player-row empty-player"><div class="avatar">+</div><div class="player-meta"><strong>Open seat</strong><span>Waiting for player</span></div></div>
+                <div class="player-row empty-player">
+                    <div class="avatar">+</div>
+                    <div class="player-meta"><strong>Open seat</strong><span>Waiting for player</span></div>
+                </div>
             }
         </div>
     </section>
@@ -36,7 +50,7 @@
         <div class="summary-item"><span>Minimum bet</span><strong>$@LobbyService.Settings.MinimumBet</strong></div>
         <div class="summary-item"><span>Dealer soft 17</span><strong>@(LobbyService.Settings.DealerHitsSoft17 ? "Hits" : "Stands")</strong></div>
         <div class="summary-item"><span>Double after split</span><strong>@(LobbyService.Settings.DoubleAfterSplit ? "On" : "Off")</strong></div>
-        <button class="button primary large full" @onclick="() => Nav.NavigateTo(\"/game\")">Start game</button>
-        <p class="helper-text">Prototype: host authorization and synchronized ready states are TODOs.</p>
+        <button class="button primary large full" @onclick='() => Nav.NavigateTo("/game")'>Start game</button>
+        <p class="helper-text">Prototype: host authorization and synchronized ready states are still TODOs.</p>
     </aside>
 </div>

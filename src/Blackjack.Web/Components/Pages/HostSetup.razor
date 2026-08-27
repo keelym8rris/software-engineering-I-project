@@ -6,38 +6,53 @@
 <PageTitle>Host a Lobby</PageTitle>
 
 <section class="page-heading">
-    <div><span class="eyebrow">HOST SETUP</span><h1>Build your table.</h1><p class="lede compact">Choose the table size and house rules before opening the lobby.</p></div>
+    <SectionHeader Kicker="HOST SETUP" Title="Build your table." Description="Choose the table size and house rules before opening the lobby." />
     <span class="step-badge">Step 1 of 2</span>
 </section>
 
 <div class="settings-grid">
     <section class="panel form-panel">
-        <h2>Game setup</h2>
+        <h2>General</h2>
         <label>Game</label>
         <select @bind="Lobby.Settings.GameName"><option>Blackjack</option></select>
 
         <label>Maximum players</label>
         <select @bind="Lobby.Settings.MaxPlayers">
-            @for (var i = 2; i <= 8; i++) { <option value="@i">@i players</option> }
+            @for (var i = 2; i <= 8; i++)
+            {
+                <option value="@i">@i players</option>
+            }
         </select>
 
         <div class="two-col">
-            <div><label>Starting bankroll</label><input type="number" min="100" step="100" @bind="Lobby.Settings.StartingBankroll" /></div>
-            <div><label>Minimum bet</label><input type="number" min="1" step="5" @bind="Lobby.Settings.MinimumBet" /></div>
+            <div>
+                <label>Starting bankroll</label>
+                <input type="number" min="100" step="100" @bind="Lobby.Settings.StartingBankroll" />
+            </div>
+            <div>
+                <label>Minimum bet</label>
+                <input type="number" min="1" step="5" @bind="Lobby.Settings.MinimumBet" />
+            </div>
         </div>
     </section>
 
     <section class="panel form-panel">
-        <h2>House rules</h2>
+        <h2>Blackjack rules</h2>
         <label class="toggle-row"><span><strong>Dealer hits soft 17</strong><small>Dealer draws on A + 6.</small></span><input type="checkbox" @bind="Lobby.Settings.DealerHitsSoft17" /></label>
         <label class="toggle-row"><span><strong>Double after split</strong><small>Allow doubling split hands.</small></span><input type="checkbox" @bind="Lobby.Settings.DoubleAfterSplit" /></label>
-        <div class="rule-placeholder"><strong>More rules later</strong><p>Insurance, surrender, deck count, split limits, and payout configuration can slot in here.</p></div>
+        <div class="rule-placeholder">
+            <strong>More rules later</strong>
+            <p>Insurance, surrender, deck count, split limits, and payout configuration can slot in here.</p>
+        </div>
     </section>
 </div>
 
 <div class="bottom-action-bar panel">
-    <div><strong>@Lobby.Settings.MaxPlayers-player Blackjack</strong><span>$@Lobby.Settings.StartingBankroll bankroll · $@Lobby.Settings.MinimumBet minimum</span></div>
-    <button class="button primary large" @onclick="CreateLobby">Create lobby</button>
+    <div>
+        <strong>@Lobby.Settings.MaxPlayers-player Blackjack</strong>
+        <span>$@Lobby.Settings.StartingBankroll bankroll · $@Lobby.Settings.MinimumBet minimum</span>
+    </div>
+    <button class="button primary large" @onclick="CreateLobby">Create Table</button>
 </div>
 
 @code {

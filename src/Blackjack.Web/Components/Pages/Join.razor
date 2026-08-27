@@ -6,16 +6,20 @@
 <PageTitle>Join a Lobby</PageTitle>
 
 <section class="center-stage">
-    <div class="panel form-panel narrow">
-        <span class="eyebrow">JOIN A TABLE</span>
-        <h1>Enter your lobby code.</h1>
-        <p class="lede compact">Ask the host for the six-character code shown in their pre-game lobby.</p>
+    <div class="panel form-panel narrow join-shell">
+        <SectionHeader Kicker="JOIN A TABLE" Title="Enter your lobby code." Description="Ask the host for the six-character code shown in the lobby." Compact="true" />
 
         <label for="joinName">Display name</label>
         <input id="joinName" @bind="displayName" maxlength="24" placeholder="Your name" />
 
         <label for="joinCode">Lobby code</label>
-        <input id="joinCode" class="code-input" @bind="joinCode" maxlength="8" placeholder="ABC123" />
+        <input id="joinCode" class="code-input" @bind="joinCode" maxlength="6" placeholder="ABC123" inputmode="text" autocomplete="off" spellcheck="false" />
+
+        <div class="code-hint-row">
+            <span>Six characters</span>
+            <span>Auto-uppercase</span>
+            <span>Paste friendly</span>
+        </div>
 
         @if (!string.IsNullOrWhiteSpace(message))
         {
@@ -23,11 +27,11 @@
         }
 
         <div class="stack-actions">
-            <button class="button primary large" @onclick="JoinLobby">Join lobby</button>
-            <a class="button ghost" href="/">Back home</a>
+            <button class="button primary large" @onclick="JoinLobby">Join Table</button>
+            <a class="button ghost" href="/">Back Home</a>
         </div>
 
-        <p class="helper-text">Prototype note: this currently simulates joining locally. The real hosted-lobby lookup will replace this handler later.</p>
+        <p class="helper-text">Prototype note: this page will later connect to shared lobby state and validation services.</p>
     </div>
 </section>
 

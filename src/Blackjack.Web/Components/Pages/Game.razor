@@ -7,15 +7,18 @@
 
 <section class="game-shell">
     <div class="game-topline">
-        <div><span class="eyebrow">LIVE TABLE</span><h1>Blackjack</h1></div>
+        <div><span class="eyebrow">LIVE TABLE</span><h1>Blackjack</h1><p class="lede compact">Server-authored cards, elegant table surfaces, and a focused play area for the current round.</p></div>
         <div class="round-info"><span>Round</span><strong>01</strong></div>
-        <button class="button danger" @onclick="() => Nav.NavigateTo(\"/lobby\")">End game</button>
+        <button class="button danger" @onclick='() => Nav.NavigateTo("/lobby")'>End game</button>
     </div>
 
     <div class="blackjack-table panel">
         <div class="dealer-area">
             <span class="seat-label">Dealer</span>
-            <div class="hand-row"><div class="playing-card dark-card">K<span>♠</span></div><div class="playing-card card-back">21</div></div>
+            <div class="hand-row">
+                <div class="playing-card dark-card">K<span>♠</span></div>
+                <div class="playing-card card-back">21</div>
+            </div>
             <div class="hand-total">Showing 10</div>
         </div>
 
