@@ -1,42 +1,134 @@
 @page "/lobby"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject NavigationManager Nav
-@inject LobbyPrototypeService LobbyService
+@inject PlayerSessionService Session
+@inject InMemoryLobbyService Lobbies
 
 <PageTitle>Lobby</PageTitle>
 
-<section class="page-heading lobby-heading">
-    <div><span class="eyebrow">PRE-GAME LOBBY</span><h1>Your table is almost ready.</h1><p class="lede compact">Share the code, wait for everyone to arrive, then start when the table is ready.</p></div>
-    <div class="code-card"><span>JOIN CODE</span><strong>@LobbyService.JoinCode</strong><small>Share this with your players</small></div>
-</section>
-
-<div class="lobby-grid">
-    <section class="panel">
-        <div class="panel-heading"><span>Players</span><span>@LobbyService.Players.Count / @LobbyService.Settings.MaxPlayers</span></div>
-        <div class="player-list">
-            @foreach (var player in LobbyService.Players)
-            {
-                <div class="player-row">
-                    <div class="avatar">@player.DisplayName[..1].ToUpperInvariant()</div>
-                    <div class="player-meta"><strong>@player.DisplayName</strong><span>@(player.IsHost ? "Host" : "Player")</span></div>
-                    <span class="ready-state @(player.IsReady ? "ready" : "waiting")">@(player.IsReady ? "Ready" : "Waiting")</span>
-                </div>
-            }
-            @for (var i = LobbyService.Players.Count; i < LobbyService.Settings.MaxPlayers; i++)
-            {
-                <div class="player-row empty-player"><div class="avatar">+</div><div class="player-meta"><strong>Open seat</strong><span>Waiting for player</span></div></div>
-            }
-        </div>
+@if (lobby is null)
+{
+    <section class="center-stage"><div class="panel form-panel narrow"><span class="eyebrow">LOBBY</span><h1>No active table.</h1><p class="lede compact">Create a new table or join one with a code.</p><div class="stack-actions"><a class="button primary" href="/host">Host a table</a><a class="button ghost" href="/join">Join a table</a></div></div></section>
+}
+else
+{
+    <section class="page-heading lobby-heading">
+        <div><span class="eyebrow">PRIVATE TABLE</span><h1>Lobby @lobby.Code</h1><p class="lede compact">Share the code, get everyone ready, then start the first round.</p></div>
+        <div class="code-card"><span>JOIN CODE</span><strong>@lobby.Code</strong><small>Share this six-character code</small></div>
     </section>
 
-    <aside class="panel lobby-summary">
-        <div class="panel-heading"><span>Table settings</span><a href="/host">Edit</a></div>
-        <div class="summary-item"><span>Game</span><strong>@LobbyService.Settings.GameName</strong></div>
-        <div class="summary-item"><span>Starting bankroll</span><strong>$@LobbyService.Settings.StartingBankroll</strong></div>
-        <div class="summary-item"><span>Minimum bet</span><strong>$@LobbyService.Settings.MinimumBet</strong></div>
-        <div class="summary-item"><span>Dealer soft 17</span><strong>@(LobbyService.Settings.DealerHitsSoft17 ? "Hits" : "Stands")</strong></div>
-        <div class="summary-item"><span>Double after split</span><strong>@(LobbyService.Settings.DoubleAfterSplit ? "On" : "Off")</strong></div>
-        <button class="button primary large full" @onclick="() => Nav.NavigateTo(\"/game\")">Start game</button>
-        <p class="helper-text">Prototype: host authorization and synchronized ready states are TODOs.</p>
-    </aside>
-</div>
+    <div class="lobby-grid">
+        <section class="panel player-panel">
+            <div class="panel-heading"><span>Players</span><span>@lobby.Players.Count / @lobby.Settings.MaxPlayers</span></div>
+            <div class="player-list">
+                @foreach (var player in lobby.Players)
+                {
+                    <div class="player-row @(player.PlayerId == Session.PlayerId ? "current-player-row" : "")">
+                        <div class="avatar">@Initial(player.DisplayName)</div>
+                        <div class="player-meta"><strong>@player.DisplayName @(player.PlayerId == Session.PlayerId ? "· You" : "")</strong><span>@(player.IsHost ? "Host" : "Player") · $@player.Bankroll</span></div>
+                        <span class="ready-state @(player.IsReady ? "ready" : "waiting")">@(player.IsReady ? "Ready" : "Not ready")</span>
+                    </div>
+                }
+                @for (var i = lobby.Players.Count; i < lobby.Settings.MaxPlayers; i++)
+                {
+                    <div class="player-row empty-player"><div class="avatar">+</div><div class="player-meta"><strong>Open seat</strong><span>Waiting for player</span></div><span class="ready-state waiting">Open</span></div>
+                }
+            </div>
+
+            @if (!IsHost)
+            {
+                <button class="button secondary full ready-button" @onclick="ToggleReady">@(CurrentPlayer?.IsReady == true ? "Mark not ready" : "I'm ready")</button>
+            }
+        </section>
+
+        <aside class="panel lobby-summary">
+            <div class="panel-heading"><span>Table settings</span><span class="muted">Locked</span></div>
+            <div class="summary-item"><span>Game</span><strong>@lobby.Settings.GameName</strong></div>
+            <div class="summary-item"><span>Players</span><strong>@lobby.Settings.MaxPlayers max</strong></div>
+            <div class="summary-item"><span>Shoe</span><strong>@lobby.Settings.DeckCount decks</strong></div>
+            <div class="summary-item"><span>Starting bankroll</span><strong>$@lobby.Settings.StartingBankroll</strong></div>
+            <div class="summary-item"><span>Minimum bet</span><strong>$@lobby.Settings.MinimumBet</strong></div>
+            <div class="summary-item"><span>Dealer soft 17</span><strong>@(lobby.Settings.DealerHitsSoft17 ? "Hits" : "Stands")</strong></div>
+
+            @if (!string.IsNullOrWhiteSpace(message))
+            {
+                <div class="notice @(messageIsError ? "error-notice" : "success-notice")">@message</div>
+            }
+
+            @if (IsHost)
+            {
+                <button class="button primary large full" @onclick="StartGame" disabled="@(!CanStart)">Start game</button>
+                @if (!CanStart)
+                {
+                    <p class="helper-text">@StartRequirement</p>
+                }
+            }
+            else
+            {
+                <div class="waiting-host"><span class="status-dot"></span><div><strong>Waiting for host</strong><small>The game will begin when everyone is ready.</small></div></div>
+            }
+
+            <button class="button ghost full" @onclick="LeaveLobby">Leave table</button>
+        </aside>
+    </div>
+}
+
+@code {
+    private LobbyState? lobby;
+    private string message = "";
+    private bool messageIsError;
+
+    private LobbyPlayer? CurrentPlayer => lobby?.Players.FirstOrDefault(p => p.PlayerId == Session.PlayerId);
+    private bool IsHost => CurrentPlayer?.IsHost == true;
+    private bool CanStart => lobby is not null && lobby.Players.Count >= 2 && lobby.Players.All(p => p.IsReady);
+    private string StartRequirement => lobby is null ? "Lobby unavailable." : lobby.Players.Count < 2 ? "At least two players are required." : lobby.Players.Any(p => !p.IsReady) ? "Everyone must be ready before starting." : "Ready to start.";
+
+    protected override void OnInitialized()
+    {
+        lobby = Lobbies.GetLobby(Session.CurrentLobbyCode);
+        Lobbies.LobbyChanged += HandleLobbyChanged;
+        if (lobby?.GameStarted == true) Nav.NavigateTo("/game");
+    }
+
+    private void HandleLobbyChanged(string code)
+    {
+        if (!string.Equals(code, Session.CurrentLobbyCode, StringComparison.OrdinalIgnoreCase)) return;
+        _ = InvokeAsync(() =>
+        {
+            lobby = Lobbies.GetLobby(Session.CurrentLobbyCode);
+            if (lobby?.GameStarted == true) Nav.NavigateTo("/game");
+            StateHasChanged();
+        });
+    }
+
+    private void ToggleReady()
+    {
+        var result = Lobbies.ToggleReady(Session);
+        Show(result);
+        lobby = result.Lobby ?? lobby;
+    }
+
+    private void StartGame()
+    {
+        var result = Lobbies.StartGame(Session);
+        Show(result);
+        if (result.Success) Nav.NavigateTo("/game");
+    }
+
+    private void LeaveLobby()
+    {
+        Lobbies.LeaveLobby(Session);
+        Nav.NavigateTo("/");
+    }
+
+    private void Show(LobbyActionResult result)
+    {
+        message = result.Message;
+        messageIsError = !result.Success;
+    }
+
+    private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name[..1].ToUpperInvariant();
+
+    public void Dispose() => Lobbies.LobbyChanged -= HandleLobbyChanged;
+}
