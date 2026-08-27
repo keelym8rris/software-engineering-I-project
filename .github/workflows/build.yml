@@ -1,0 +1,25 @@
+name: Build and Test
+
+on:
+  pull_request:
+    branches: [ dev, feature/initial-blazor-setup ]
+  push:
+    branches: [ dev, main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore --configuration Release

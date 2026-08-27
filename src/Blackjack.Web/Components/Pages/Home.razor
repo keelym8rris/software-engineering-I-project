@@ -1,0 +1,99 @@
+@page "/"
+@rendermode InteractiveServer
+@inject NavigationManager Nav
+@inject PlayerSessionService Session
+
+<PageTitle>Blackjack · Home</PageTitle>
+
+<section class="hero-grid refined-hero">
+    <div class="hero-copy">
+        <span class="eyebrow">PRIVATE TABLE · MULTIPLAYER BLACKJACK</span>
+        <h1>Classic blackjack,<br />built for your table.</h1>
+        <p class="lede">Host a private room, invite friends with a code, choose your house rules, and play through a polished server-authoritative prototype.</p>
+
+        <div class="identity-card panel">
+            <div>
+                <span class="micro-label">PLAYING AS</span>
+                <strong class="identity-name">@Session.DisplayName</strong>
+            </div>
+            <div class="inline-control home-name-control">
+                <input @bind="displayName" maxlength="24" placeholder="Display name" />
+                <button class="button subtle" @onclick="SaveName">Update</button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(validationMessage))
+            {
+                <p class="field-error">@validationMessage</p>
+            }
+        </div>
+
+        <div class="hero-actions">
+            <button class="button primary large" @onclick="GoHost">Host a table</button>
+            <button class="button secondary large" @onclick="GoJoin">Join with code</button>
+        </div>
+    </div>
+
+    <aside class="luxury-table-preview panel">
+        <div class="felt-ring">
+            <div class="felt-copy"><span>BLACKJACK</span><small>PAYS 3 TO 2</small></div>
+            <div class="premium-card-stack" aria-hidden="true">
+                <div class="premium-card card-one"><b>A</b><span>♥</span></div>
+                <div class="premium-card card-two"><b>K</b><span>♠</span></div>
+            </div>
+            <div class="chip-row"><span class="chip">25</span><span class="chip">100</span><span class="chip">500</span></div>
+        </div>
+    </aside>
+</section>
+
+<section class="dashboard-grid upgraded-dashboard">
+    <article class="panel">
+        <div class="panel-heading"><span>How it works</span><span class="muted">3 steps</span></div>
+        <div class="timeline-list">
+            <div><span>01</span><p><strong>Create or join a table</strong><small>Hosts configure table size, bankroll, betting limits, decks, and house rules.</small></p></div>
+            <div><span>02</span><p><strong>Ready up in the lobby</strong><small>Players join with the six-character code and the host starts when everyone is ready.</small></p></div>
+            <div><span>03</span><p><strong>Play real rounds</strong><small>Place bets, hit, stand, double, and settle hands against the dealer.</small></p></div>
+        </div>
+    </article>
+
+    <article class="panel feature-panel">
+        <div class="panel-heading"><span>Current build</span><span class="live-badge">Playable</span></div>
+        <div class="feature-matrix">
+            <span>Private lobby codes</span><strong>Live</strong>
+            <span>Ready states</span><strong>Live</strong>
+            <span>House rules</span><strong>Live</strong>
+            <span>Blackjack rounds</span><strong>Live</strong>
+            <span>Persistent accounts</span><strong class="muted">Later</strong>
+            <span>Production hosting</span><strong class="muted">Later</strong>
+        </div>
+    </article>
+
+    <article class="panel credits-panel">
+        <div class="panel-heading"><span>Software Engineering I</span><span class="muted">Team project</span></div>
+        <h3>Built to be extended.</h3>
+        <p>The current version uses shared in-memory server state so your team can build toward persistence, authentication, reconnect support, richer multiplayer, and advanced blackjack rules without rewriting the UI.</p>
+        <div class="tech-stack"><span>C#</span><span>Blazor</span><span>.NET 10</span><span>GitHub</span></div>
+    </article>
+</section>
+
+@code {
+    private string displayName = "";
+    private string validationMessage = "";
+
+    protected override void OnInitialized() => displayName = Session.DisplayName;
+
+    private bool SaveName()
+    {
+        var cleaned = (displayName ?? "").Trim();
+        if (cleaned.Length is < 2 or > 24)
+        {
+            validationMessage = "Use a display name between 2 and 24 characters.";
+            return false;
+        }
+        Session.DisplayName = cleaned;
+        displayName = cleaned;
+        validationMessage = "";
+        return true;
+    }
+
+    private void GoHost() { if (SaveName()) Nav.NavigateTo("/host"); }
+    private void GoJoin() { if (SaveName()) Nav.NavigateTo("/join"); }
+}

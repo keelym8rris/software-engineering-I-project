@@ -1,0 +1,67 @@
+@page "/host"
+@rendermode InteractiveServer
+@inject NavigationManager Nav
+@inject PlayerSessionService Session
+@inject InMemoryLobbyService Lobbies
+
+<PageTitle>Host a Table</PageTitle>
+
+<section class="page-heading">
+    <div><span class="eyebrow">HOST SETUP</span><h1>Design your table.</h1><p class="lede compact">Choose a few house rules, then open a private lobby for your group.</p></div>
+    <span class="step-badge">Step 1 of 2</span>
+</section>
+
+<div class="settings-grid upgraded-settings">
+    <section class="panel form-panel">
+        <div class="panel-heading"><span>Table basics</span><span class="muted">Blackjack</span></div>
+
+        <label>Maximum players</label>
+        <select @bind="settings.MaxPlayers">
+            @for (var i = 2; i <= 8; i++) { <option value="@i">@i players</option> }
+        </select>
+
+        <div class="two-col">
+            <div><label>Starting bankroll</label><input type="number" min="100" step="100" @bind="settings.StartingBankroll" /></div>
+            <div><label>Minimum bet</label><input type="number" min="1" step="5" @bind="settings.MinimumBet" /></div>
+        </div>
+
+        <label>Decks in shoe</label>
+        <select @bind="settings.DeckCount">
+            @for (var i = 1; i <= 8; i++) { <option value="@i">@i @(i == 1 ? "deck" : "decks")</option> }
+        </select>
+    </section>
+
+    <section class="panel form-panel">
+        <div class="panel-heading"><span>House rules</span><span class="muted">Customizable</span></div>
+        <label class="toggle-row"><span><strong>Dealer hits soft 17</strong><small>Dealer draws on soft 17 instead of standing.</small></span><input type="checkbox" @bind="settings.DealerHitsSoft17" /></label>
+        <label class="toggle-row"><span><strong>Double after split</strong><small>Preserved for future split-hand support.</small></span><input type="checkbox" @bind="settings.DoubleAfterSplit" /></label>
+        <label class="toggle-row"><span><strong>Late surrender</strong><small>Configuration placeholder; engine support comes later.</small></span><input type="checkbox" @bind="settings.SurrenderEnabled" /></label>
+        <label class="toggle-row"><span><strong>Insurance</strong><small>Configuration placeholder; engine support comes later.</small></span><input type="checkbox" @bind="settings.InsuranceEnabled" /></label>
+    </section>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="notice error-notice host-error">@message</div>
+}
+
+<div class="bottom-action-bar panel">
+    <div><strong>@settings.MaxPlayers-player Blackjack</strong><span>@settings.DeckCount-deck shoe · $@settings.StartingBankroll bankroll · $@settings.MinimumBet minimum</span></div>
+    <button class="button primary large" @onclick="CreateLobby">Create private table</button>
+</div>
+
+@code {
+    private readonly LobbySettings settings = new();
+    private string message = "";
+
+    private void CreateLobby()
+    {
+        var result = Lobbies.CreateLobby(Session, settings);
+        if (!result.Success)
+        {
+            message = result.Message;
+            return;
+        }
+        Nav.NavigateTo("/lobby");
+    }
+}

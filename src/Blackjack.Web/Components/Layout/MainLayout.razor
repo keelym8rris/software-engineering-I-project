@@ -1,0 +1,29 @@
+@inherits LayoutComponentBase
+
+<div class="site-shell">
+    <header class="topbar">
+        <a class="brand" href="/">
+            <span class="brand-mark">21</span>
+            <span>
+                <strong>Blackjack</strong>
+                <small>private multiplayer table</small>
+            </span>
+        </a>
+        <nav class="nav-links" aria-label="Primary navigation">
+            <a href="/">Home</a>
+            <a href="/join">Join</a>
+            <a href="/host">Host</a>
+            <a href="/lobby">Lobby</a>
+        </nav>
+        <div class="status-pill"><span class="status-dot"></span> Local server</div>
+    </header>
+
+    <main class="page-wrap">
+        @Body
+    </main>
+
+    <footer class="footer">
+        <span>Software Engineering I · Blackjack</span>
+        <span>Blazor · C# · .NET 10</span>
+    </footer>
+</div>

@@ -1,0 +1,76 @@
+@page "/join"
+@rendermode InteractiveServer
+@inject NavigationManager Nav
+@inject PlayerSessionService Session
+@inject InMemoryLobbyService Lobbies
+
+<PageTitle>Join a Table</PageTitle>
+
+<section class="center-stage join-stage">
+    <div class="panel form-panel narrow join-card">
+        <span class="eyebrow">JOIN A PRIVATE TABLE</span>
+        <h1>Enter your lobby code.</h1>
+        <p class="lede compact">Use the six-character code from your host. Codes are not case-sensitive.</p>
+
+        <label for="joinName">Display name</label>
+        <input id="joinName" @bind="displayName" maxlength="24" placeholder="Your name" />
+
+        <label for="joinCode">Lobby code</label>
+        <input id="joinCode" class="code-input" value="@joinCode" @oninput="NormalizeCode" maxlength="6" placeholder="ABC123" autocomplete="off" />
+
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+            <div class="notice @(isError ? "error-notice" : "success-notice")">@message</div>
+        }
+
+        <div class="stack-actions">
+            <button class="button primary large" @onclick="JoinLobby" disabled="@isJoining">@(isJoining ? "Joining…" : "Join table")</button>
+            <a class="button ghost" href="/">Back home</a>
+        </div>
+
+        <div class="secure-note"><span>●</span><p><strong>Local multiplayer prototype</strong><small>Two browser windows connected to this app can share the same in-memory lobby while the server is running.</small></p></div>
+    </div>
+</section>
+
+@code {
+    private string displayName = "";
+    private string joinCode = "";
+    private string message = "";
+    private bool isError;
+    private bool isJoining;
+
+    protected override void OnInitialized() => displayName = Session.DisplayName;
+
+    private void NormalizeCode(ChangeEventArgs e)
+    {
+        joinCode = new string((e.Value?.ToString() ?? "").Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).Take(6).ToArray());
+    }
+
+    private async Task JoinLobby()
+    {
+        isJoining = true;
+        await Task.Yield();
+        var cleanedName = (displayName ?? "").Trim();
+        if (cleanedName.Length is < 2 or > 24)
+        {
+            Fail("Use a display name between 2 and 24 characters.");
+            isJoining = false;
+            return;
+        }
+
+        Session.DisplayName = cleanedName;
+        var result = Lobbies.JoinLobby(Session, joinCode);
+        if (!result.Success)
+        {
+            Fail(result.Message);
+            isJoining = false;
+            return;
+        }
+
+        message = "Joined successfully.";
+        isError = false;
+        Nav.NavigateTo("/lobby");
+    }
+
+    private void Fail(string text) { message = text; isError = true; }
+}
