@@ -1,80 +1,99 @@
 @page "/"
 @rendermode InteractiveServer
 @inject NavigationManager Nav
-@inject LobbyPrototypeService Lobby
+@inject PlayerSessionService Session
 
 <PageTitle>Blackjack · Home</PageTitle>
 
-<section class="hero-grid">
+<section class="hero-grid refined-hero">
     <div class="hero-copy">
-        <span class="eyebrow">MULTIPLAYER BLACKJACK</span>
-        <h1>Pull up a chair.<br />The table is open.</h1>
-        <p class="lede">A polished starter for hosted blackjack lobbies, player stats, house rules, and server-authoritative gameplay.</p>
+        <span class="eyebrow">PRIVATE TABLE · MULTIPLAYER BLACKJACK</span>
+        <h1>Classic blackjack,<br />built for your table.</h1>
+        <p class="lede">Host a private room, invite friends with a code, choose your house rules, and play through a polished server-authoritative prototype.</p>
 
-        <div class="name-card panel">
-            <label for="displayName">Display name</label>
-            <div class="inline-control">
-                <input id="displayName" @bind="displayName" maxlength="24" placeholder="Enter a name" />
-                <button class="button subtle" @onclick="SaveName">Save</button>
+        <div class="identity-card panel">
+            <div>
+                <span class="micro-label">PLAYING AS</span>
+                <strong class="identity-name">@Session.DisplayName</strong>
             </div>
+            <div class="inline-control home-name-control">
+                <input @bind="displayName" maxlength="24" placeholder="Display name" />
+                <button class="button subtle" @onclick="SaveName">Update</button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(validationMessage))
+            {
+                <p class="field-error">@validationMessage</p>
+            }
         </div>
 
         <div class="hero-actions">
-            <button class="button primary large" @onclick="() => Nav.NavigateTo(\"/host\")">Host a table</button>
-            <button class="button secondary large" @onclick="() => Nav.NavigateTo(\"/join\")">Join with code</button>
+            <button class="button primary large" @onclick="GoHost">Host a table</button>
+            <button class="button secondary large" @onclick="GoJoin">Join with code</button>
         </div>
     </div>
 
-    <aside class="table-preview panel">
-        <div class="table-felt">
-            <span class="table-label">BLACKJACK PAYS 3 TO 2</span>
-            <div class="card-fan" aria-hidden="true">
-                <div class="playing-card red-card">A<span>♥</span></div>
-                <div class="playing-card dark-card">K<span>♠</span></div>
+    <aside class="luxury-table-preview panel">
+        <div class="felt-ring">
+            <div class="felt-copy"><span>BLACKJACK</span><small>PAYS 3 TO 2</small></div>
+            <div class="premium-card-stack" aria-hidden="true">
+                <div class="premium-card card-one"><b>A</b><span>♥</span></div>
+                <div class="premium-card card-two"><b>K</b><span>♠</span></div>
             </div>
-            <div class="dealer-chip">DEALER</div>
+            <div class="chip-row"><span class="chip">25</span><span class="chip">100</span><span class="chip">500</span></div>
         </div>
     </aside>
 </section>
 
-<section class="dashboard-grid">
-    <article class="panel stat-panel">
-        <div class="panel-heading"><span>Player profile</span><span class="muted">prototype</span></div>
-        <h2>@Lobby.DisplayName</h2>
-        <div class="stat-row"><span>Games played</span><strong>0</strong></div>
-        <div class="stat-row"><span>Wins</span><strong>0</strong></div>
-        <div class="stat-row"><span>Best streak</span><strong>—</strong></div>
-        <button class="text-button" disabled>Member login · coming later</button>
+<section class="dashboard-grid upgraded-dashboard">
+    <article class="panel">
+        <div class="panel-heading"><span>How it works</span><span class="muted">3 steps</span></div>
+        <div class="timeline-list">
+            <div><span>01</span><p><strong>Create or join a table</strong><small>Hosts configure table size, bankroll, betting limits, decks, and house rules.</small></p></div>
+            <div><span>02</span><p><strong>Ready up in the lobby</strong><small>Players join with the six-character code and the host starts when everyone is ready.</small></p></div>
+            <div><span>03</span><p><strong>Play real rounds</strong><small>Place bets, hit, stand, double, and settle hands against the dealer.</small></p></div>
+        </div>
     </article>
 
-    <article class="panel">
-        <div class="panel-heading"><span>Available games</span><span class="live-badge">1 live</span></div>
-        <div class="game-list-item">
-            <div class="game-icon">21</div>
-            <div><strong>Blackjack</strong><p>2–8 players · custom house rules</p></div>
-            <span class="tag">Ready</span>
-        </div>
-        <div class="game-list-item disabled-row">
-            <div class="game-icon ghost">?</div>
-            <div><strong>More table games</strong><p>Architecture leaves room for future games.</p></div>
-            <span class="tag">Later</span>
+    <article class="panel feature-panel">
+        <div class="panel-heading"><span>Current build</span><span class="live-badge">Playable</span></div>
+        <div class="feature-matrix">
+            <span>Private lobby codes</span><strong>Live</strong>
+            <span>Ready states</span><strong>Live</strong>
+            <span>House rules</span><strong>Live</strong>
+            <span>Blackjack rounds</span><strong>Live</strong>
+            <span>Persistent accounts</span><strong class="muted">Later</strong>
+            <span>Production hosting</span><strong class="muted">Later</strong>
         </div>
     </article>
 
     <article class="panel credits-panel">
-        <div class="panel-heading"><span>Project</span><span class="muted">SE I</span></div>
-        <h3>Built as a team.</h3>
-        <p>This starter intentionally leaves multiplayer transport, persistence, authentication, and final blackjack rules for your team to implement.</p>
+        <div class="panel-heading"><span>Software Engineering I</span><span class="muted">Team project</span></div>
+        <h3>Built to be extended.</h3>
+        <p>The current version uses shared in-memory server state so your team can build toward persistence, authentication, reconnect support, richer multiplayer, and advanced blackjack rules without rewriting the UI.</p>
         <div class="tech-stack"><span>C#</span><span>Blazor</span><span>.NET 10</span><span>GitHub</span></div>
     </article>
 </section>
 
 @code {
-    private string displayName = "Guest";
-    protected override void OnInitialized() => displayName = Lobby.DisplayName;
-    private void SaveName()
+    private string displayName = "";
+    private string validationMessage = "";
+
+    protected override void OnInitialized() => displayName = Session.DisplayName;
+
+    private bool SaveName()
     {
-        Lobby.DisplayName = string.IsNullOrWhiteSpace(displayName) ? "Guest" : displayName.Trim();
-        displayName = Lobby.DisplayName;
+        var cleaned = (displayName ?? "").Trim();
+        if (cleaned.Length is < 2 or > 24)
+        {
+            validationMessage = "Use a display name between 2 and 24 characters.";
+            return false;
+        }
+        Session.DisplayName = cleaned;
+        displayName = cleaned;
+        validationMessage = "";
+        return true;
     }
+
+    private void GoHost() { if (SaveName()) Nav.NavigateTo("/host"); }
+    private void GoJoin() { if (SaveName()) Nav.NavigateTo("/join"); }
 }
