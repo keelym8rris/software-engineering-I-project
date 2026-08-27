@@ -1,50 +1,159 @@
 @page "/game"
 @rendermode InteractiveServer
 @inject NavigationManager Nav
-@inject LobbyPrototypeService Lobby
+@inject PlayerSessionService Session
+@inject InMemoryLobbyService Lobbies
+@inject BlackjackGameService GameEngine
 
 <PageTitle>Blackjack Table</PageTitle>
 
-<section class="game-shell">
-    <div class="game-topline">
-        <div><span class="eyebrow">LIVE TABLE</span><h1>Blackjack</h1></div>
-        <div class="round-info"><span>Round</span><strong>01</strong></div>
-        <button class="button danger" @onclick="() => Nav.NavigateTo(\"/lobby\")">End game</button>
-    </div>
-
-    <div class="blackjack-table panel">
-        <div class="dealer-area">
-            <span class="seat-label">Dealer</span>
-            <div class="hand-row"><div class="playing-card dark-card">K<span>♠</span></div><div class="playing-card card-back">21</div></div>
-            <div class="hand-total">Showing 10</div>
+@if (lobby is null || !lobby.GameStarted)
+{
+    <section class="center-stage"><div class="panel form-panel narrow"><span class="eyebrow">BLACKJACK</span><h1>No active game.</h1><p class="lede compact">Join a lobby and let the host start the table first.</p><a class="button primary" href="/">Return home</a></div></section>
+}
+else
+{
+    <section class="game-shell">
+        <div class="game-topline">
+            <div><span class="eyebrow">TABLE @lobby.Code</span><h1>Blackjack</h1></div>
+            <div class="game-status-pill"><span class="status-dot"></span>@RoundLabel</div>
+            <button class="button ghost" @onclick="LeaveGame">Leave table</button>
         </div>
 
-        <div class="table-center-mark">BLACKJACK <small>PAYS 3 TO 2</small></div>
+        <div class="blackjack-table premium-game-table panel">
+            <div class="dealer-area">
+                <span class="seat-label">Dealer</span>
+                <div class="hand-row">
+                    @for (var i = 0; i < lobby.Round.DealerHand.Cards.Count; i++)
+                    {
+                        var card = lobby.Round.DealerHand.Cards[i];
+                        if (i == 1 && lobby.Round.DealerHoleCardHidden)
+                        {
+                            <div class="playing-card card-back"><span>21</span></div>
+                        }
+                        else
+                        {
+                            <div class="playing-card game-card @(card.IsRed ? "red-card" : "dark-card")"><b>@card.RankLabel</b><span>@card.SuitSymbol</span></div>
+                        }
+                    }
+                </div>
+                @if (lobby.Round.DealerHand.Cards.Count > 0)
+                {
+                    <div class="hand-total">@(lobby.Round.DealerHoleCardHidden ? $"Showing {VisibleDealerValue}" : $"Dealer · {lobby.Round.DealerHand.Value}")</div>
+                }
+            </div>
 
-        <div class="players-on-table">
-            @foreach (var player in Lobby.Players)
+            <div class="table-center-mark"><span>BLACKJACK</span><small>PAYS 3 TO 2 · DEALER @(lobby.Settings.DealerHitsSoft17 ? "HITS" : "STANDS") SOFT 17</small></div>
+
+            <div class="main-player-area">
+                <div class="player-bankroll-line"><span>@Session.DisplayName</span><strong>$@(CurrentPlayer?.Bankroll ?? 0)</strong></div>
+                <div class="hand-row player-main-hand">
+                    @foreach (var card in lobby.Round.PlayerHand.Cards)
+                    {
+                        <div class="playing-card game-card @(card.IsRed ? "red-card" : "dark-card")"><b>@card.RankLabel</b><span>@card.SuitSymbol</span></div>
+                    }
+                    @if (lobby.Round.PlayerHand.Cards.Count == 0)
+                    {
+                        <div class="empty-hand-message">Place a bet to receive your cards</div>
+                    }
+                </div>
+                @if (lobby.Round.PlayerHand.Cards.Count > 0)
+                {
+                    <div class="hand-total player-total">Your hand · @lobby.Round.PlayerHand.Value</div>
+                }
+            </div>
+
+            <div class="spectator-seats">
+                @foreach (var player in lobby.Players.Where(p => p.PlayerId != Session.PlayerId))
+                {
+                    <div class="compact-seat"><div class="avatar tiny-avatar">@Initial(player.DisplayName)</div><div><strong>@player.DisplayName</strong><span>$@player.Bankroll</span></div></div>
+                }
+            </div>
+        </div>
+
+        <div class="game-message panel"><span class="message-suit">♠</span><div><small>TABLE MESSAGE</small><strong>@lobby.Round.Message</strong></div></div>
+
+        <div class="game-controls panel upgraded-controls">
+            @if (lobby.Round.State is RoundState.Betting or RoundState.Resolved)
             {
-                <div class="table-seat @(player.IsHost ? "active-seat" : "")">
-                    <div class="mini-hand"><div class="mini-card">A♥</div><div class="mini-card">7♣</div></div>
-                    <strong>@player.DisplayName</strong>
-                    <span>$@player.Bankroll</span>
+                <div class="betting-zone">
+                    <div><span class="micro-label">BET</span><strong class="bet-value">$@bet</strong></div>
+                    <div class="chip-selector">
+                        @foreach (var amount in ChipOptions)
+                        {
+                            <button class="bet-chip @(bet == amount ? "selected-chip" : "")" @onclick="() => bet = amount" disabled="@(amount > (CurrentPlayer?.Bankroll ?? 0))">@amount</button>
+                        }
+                    </div>
+                    @if (lobby.Round.State == RoundState.Betting)
+                    {
+                        <button class="button primary large" @onclick="Deal">Deal hand</button>
+                    }
+                    else
+                    {
+                        <button class="button primary large" @onclick="NextRound">Next round</button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="bet-summary"><span>Current bet</span><strong>$@lobby.Round.Bet</strong></div>
+                <div class="control-actions">
+                    <button class="button primary" @onclick="Hit" disabled="@(lobby.Round.State != RoundState.PlayerTurn)">Hit</button>
+                    <button class="button secondary" @onclick="Stand" disabled="@(lobby.Round.State != RoundState.PlayerTurn)">Stand</button>
+                    <button class="button ghost" @onclick="Double" disabled="@(!CanDouble)">Double</button>
+                    <button class="button ghost" disabled title="Split support is intentionally left for a later feature branch.">Split</button>
                 </div>
             }
         </div>
-    </div>
 
-    <div class="game-controls panel">
-        <div class="bet-summary"><span>Your bet</span><strong>$@Lobby.Settings.MinimumBet</strong></div>
-        <div class="control-actions">
-            <button class="button secondary">Hit</button>
-            <button class="button secondary">Stand</button>
-            <button class="button ghost">Double</button>
-            <button class="button ghost">Split</button>
-        </div>
-        <div class="turn-indicator"><span class="status-dot"></span> Prototype turn</div>
-    </div>
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="notice error-notice">@errorMessage</div>
+        }
+    </section>
+}
 
-    <div class="implementation-banner">
-        <strong>Engineering handoff:</strong> these controls are intentionally visual only. Add a server-authoritative game engine, legal-action validation, deck/shuffle state, synchronized rounds, elimination logic, and host-only end-game behavior here.
-    </div>
-</section>
+@code {
+    private LobbyState? lobby;
+    private int bet;
+    private string errorMessage = "";
+
+    private LobbyPlayer? CurrentPlayer => lobby?.Players.FirstOrDefault(p => p.PlayerId == Session.PlayerId);
+    private int[] ChipOptions => lobby is null ? [25, 50, 100, 250] : [lobby.Settings.MinimumBet, lobby.Settings.MinimumBet * 2, lobby.Settings.MinimumBet * 4, lobby.Settings.MinimumBet * 10];
+    private bool CanDouble => lobby?.Round.State == RoundState.PlayerTurn && lobby.Round.PlayerHand.Cards.Count == 2 && lobby.Round.Bet * 2 <= (CurrentPlayer?.Bankroll ?? 0);
+    private string RoundLabel => lobby?.Round.State switch { RoundState.Betting => "Betting", RoundState.PlayerTurn => "Your turn", RoundState.DealerTurn => "Dealer", RoundState.Resolved => "Round complete", _ => "Table open" };
+    private int VisibleDealerValue => lobby is null || lobby.Round.DealerHand.Cards.Count == 0 ? 0 : CardValue(lobby.Round.DealerHand.Cards[0]);
+
+    protected override void OnInitialized()
+    {
+        lobby = Lobbies.GetLobby(Session.CurrentLobbyCode);
+        if (lobby is not null) bet = lobby.Settings.MinimumBet;
+    }
+
+    private void Deal() => Apply(GameEngine.PlaceBetAndDeal(lobby!, Session, bet));
+    private void Hit() => Apply(GameEngine.Hit(lobby!, Session));
+    private void Stand() => Apply(GameEngine.Stand(lobby!, Session));
+    private void Double() => Apply(GameEngine.DoubleDown(lobby!, Session));
+
+    private void NextRound()
+    {
+        GameEngine.ResetRound(lobby!);
+        bet = Math.Min(lobby!.Settings.MinimumBet, CurrentPlayer?.Bankroll ?? lobby.Settings.MinimumBet);
+        errorMessage = "";
+    }
+
+    private void Apply(LobbyActionResult result)
+    {
+        if (!result.Success) errorMessage = result.Message;
+        else { errorMessage = ""; lobby = result.Lobby ?? lobby; }
+    }
+
+    private void LeaveGame()
+    {
+        Lobbies.LeaveLobby(Session);
+        Nav.NavigateTo("/");
+    }
+
+    private static int CardValue(Card card) => card.Rank switch { Rank.Ace => 11, Rank.King or Rank.Queen or Rank.Jack => 10, _ => (int)card.Rank };
+    private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name[..1].ToUpperInvariant();
+}
