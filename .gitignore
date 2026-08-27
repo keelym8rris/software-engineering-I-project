@@ -1,0 +1,27 @@
+# Build output
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+.vs/
+.vscode/
+
+# NuGet
+*.nupkg
+packages/
+project.lock.json
+
+# Publish output
+publish/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / environment
+*.env
+appsettings.Development.json
+secrets.json

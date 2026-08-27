@@ -1,0 +1,172 @@
+@page "/game/{GameId}"
+@using BlackjackApp.Models
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+
+<div class="game-table">
+    @if (_game == null)
+    {
+        <p class="status">Connecting to game...</p>
+    }
+    else
+    {
+        <div class="game-header">
+            <span class="game-id">Game: @GameId</span>
+            <span class="phase-badge">@_game.Phase</span>
+            <span class="message">@_game.Message</span>
+        </div>
+
+        <!-- Dealer -->
+        <div class="dealer-area">
+            <h3>Dealer @(_game.Phase == "Playing" ? "" : $"— {_game.Dealer.HandValue}")</h3>
+            <div class="hand">
+                @for (int i = 0; i < _game.Dealer.Hand.Count; i++)
+                {
+                    var card = _game.Dealer.Hand[i];
+                    @if (i == 1 && _game.Phase == "Playing")
+                    {
+                        <div class="card card-back">🂠</div>
+                    }
+                    else
+                    {
+                        <div class="card @(card.IsRed ? "red" : "black")">@card.Display</div>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Players -->
+        <div class="players-area">
+            @foreach (var player in _game.Players)
+            {
+                bool isMe = player.ConnectionId == _myConnectionId;
+                bool isActive = _game.CurrentPlayerConnectionId == player.ConnectionId;
+                <div class="player-seat @(isMe ? "me" : "") @(isActive ? "active" : "")">
+                    <div class="player-name">
+                        @player.Name
+                        @if (isMe) { <span class="you-badge">You</span> }
+                    </div>
+                    <div class="player-chips">💰 @player.Chips</div>
+                    <div class="player-bet">Bet: @player.CurrentBet</div>
+                    <div class="hand">
+                        @foreach (var card in player.Hand)
+                        {
+                            <div class="card @(card.IsRed ? "red" : "black")">@card.Display</div>
+                        }
+                    </div>
+                    @if (player.Hand.Count > 0)
+                    {
+                        <div class="hand-value">Value: @player.HandValue</div>
+                    }
+                    <div class="status-badge status-@player.Status.ToLower()">@player.Status</div>
+                </div>
+            }
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+            @if (_game.Phase == "Lobby" && _game.Players.Count > 0)
+            {
+                <button class="btn btn-primary" @onclick="StartBetting">Start Game</button>
+            }
+            else if (_game.Phase == "Betting")
+            {
+                var me = _game.Players.FirstOrDefault(p => p.ConnectionId == _myConnectionId);
+                @if (me != null && me.CurrentBet == 0)
+                {
+                    <div class="bet-controls">
+                        <label>Bet amount:</label>
+                        <input type="number" @bind="_betAmount" min="10" max="@me.Chips" step="10" class="input" />
+                        <button class="btn btn-primary" @onclick="PlaceBet" disabled="@(_betAmount < 10)">Place Bet</button>
+                    </div>
+                    <div class="quick-bets">
+                        @foreach (var amt in new[] { 10, 25, 50, 100 })
+                        {
+                            <button class="btn btn-chip" @onclick="() => QuickBet(amt)">@amt</button>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="muted">Waiting for other players to bet...</p>
+                }
+            }
+            else if (_game.Phase == "Playing")
+            {
+                @if (_game.CurrentPlayerConnectionId == _myConnectionId)
+                {
+                    <button class="btn btn-primary" @onclick="Hit">Hit</button>
+                    <button class="btn btn-secondary" @onclick="Stand">Stand</button>
+                }
+                else
+                {
+                    <p class="muted">Waiting for your turn...</p>
+                }
+            }
+            else if (_game.Phase == "RoundOver")
+            {
+                <button class="btn btn-primary" @onclick="NewRound">New Round</button>
+                <button class="btn btn-secondary" @onclick="LeaveGame">Leave</button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string GameId { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "name")] public string PlayerName { get; set; } = "Player";
+    [SupplyParameterFromQuery(Name = "connId")] public string? PriorConnectionId { get; set; }
+
+    private HubConnection? _hub;
+    private GameStateDto? _game;
+    private string _myConnectionId = "";
+    private int _betAmount = 10;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _hub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/blackjackhub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hub.On<GameStateDto>("GameStateUpdated", state =>
+        {
+            _game = state;
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hub.On<string, string>("GameJoined", (_, connId) =>
+        {
+            _myConnectionId = connId;
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hub.On<string>("Error", msg =>
+        {
+            Console.WriteLine($"Hub error: {msg}");
+        });
+
+        await _hub.StartAsync();
+        _myConnectionId = _hub.ConnectionId ?? "";
+
+        var name = string.IsNullOrWhiteSpace(PlayerName) ? "Player" : PlayerName;
+        await _hub.SendAsync("JoinGame", GameId, name, PriorConnectionId);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task StartBetting() => await _hub!.SendAsync("StartBetting", GameId);
+    private async Task PlaceBet() => await _hub!.SendAsync("PlaceBet", GameId, _betAmount);
+    private void QuickBet(int amount) => _betAmount = amount;
+    private async Task Hit() => await _hub!.SendAsync("Hit", GameId);
+    private async Task Stand() => await _hub!.SendAsync("Stand", GameId);
+    private async Task NewRound() => await _hub!.SendAsync("NewRound", GameId);
+    private void LeaveGame() => Nav.NavigateTo("/");
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub != null) await _hub.DisposeAsync();
+    }
+}
