@@ -1,0 +1,120 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+
+<div class="lobby">
+    <h1>♠ Blackjack</h1>
+
+    @if (!_connected)
+    {
+        <p class="status">Connecting...</p>
+    }
+    else
+    {
+        <div class="lobby-panel">
+            <input @bind="_playerName" placeholder="Your name" maxlength="20" class="input" />
+
+            <div class="lobby-actions">
+                <button class="btn btn-primary" @onclick="CreateGame" disabled="@string.IsNullOrWhiteSpace(_playerName)">
+                    Create New Game
+                </button>
+            </div>
+
+            @if (_openGames.Count > 0)
+            {
+                <h3>Open Games</h3>
+                <ul class="game-list">
+                    @foreach (var g in _openGames)
+                    {
+                        <li>
+                            <span>Game @g.GameId — @g.PlayerCount player(s)</span>
+                            <button class="btn btn-secondary" @onclick="() => JoinGame(g.GameId)"
+                                    disabled="@string.IsNullOrWhiteSpace(_playerName)">
+                                Join
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <p class="muted">No open games. Create one!</p>
+            }
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <p class="error">@_error</p>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private HubConnection? _hub;
+    private string _playerName = "";
+    private string _error = "";
+    private bool _connected = false;
+    private List<GameSummary> _openGames = new();
+    private System.Threading.Timer? _refreshTimer;
+
+    record GameSummary(string GameId, int PlayerCount);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _hub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/blackjackhub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hub.On<string, string>("GameCreated", (id, connId) =>
+            Nav.NavigateTo($"/game/{id}?name={Uri.EscapeDataString(_playerName.Trim())}&connId={connId}"));
+
+        _hub.On<string, string>("GameJoined", (id, connId) =>
+            Nav.NavigateTo($"/game/{id}?name={Uri.EscapeDataString(_playerName.Trim())}&connId={connId}"));
+
+        _hub.On<string>("Error", msg =>
+        {
+            _error = msg;
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hub.On<List<GameSummary>>("OpenGames", games =>
+        {
+            _openGames = games;
+            InvokeAsync(StateHasChanged);
+        });
+
+        await _hub.StartAsync();
+        _connected = true;
+        await _hub.SendAsync("GetOpenGames");
+        await InvokeAsync(StateHasChanged);
+
+        // Keep the game list fresh every 3 seconds
+        _refreshTimer = new System.Threading.Timer(async _ =>
+        {
+            if (_hub?.State == HubConnectionState.Connected)
+                await _hub.SendAsync("GetOpenGames");
+        }, null, 3000, 3000);
+    }
+
+    private async Task CreateGame()
+    {
+        if (_hub != null && !string.IsNullOrWhiteSpace(_playerName))
+            await _hub.SendAsync("CreateGame", _playerName.Trim());
+    }
+
+    private async Task JoinGame(string gameId)
+    {
+        if (_hub != null && !string.IsNullOrWhiteSpace(_playerName))
+            await _hub.SendAsync("JoinGame", gameId, _playerName.Trim(), (string?)null);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _refreshTimer?.Dispose();
+        if (_hub != null) await _hub.DisposeAsync();
+    }
+}

@@ -427,3 +427,12 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Local configuration and secrets
+appsettings.Development.json
+secrets.json
+
+# Additional generated output
+out/
+.DS_Store
+Thumbs.db
