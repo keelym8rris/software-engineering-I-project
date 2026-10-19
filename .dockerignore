@@ -1,0 +1,12 @@
+.git
+.github
+.vscode
+**/bin
+**/obj
+**/.vs
+**/publish
+**/out
+**/*.user
+**/*.suo
+*.md
+docker-compose.yml

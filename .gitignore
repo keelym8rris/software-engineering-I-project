@@ -6,7 +6,7 @@ obj/
 *.user
 *.suo
 .vs/
-.vscode/
+.vscode/*
 
 # NuGet
 *.nupkg
@@ -25,3 +25,6 @@ Thumbs.db
 *.env
 appsettings.Development.json
 secrets.json
+
+# Keep the shared extension recommendation while ignoring personal settings.
+!.vscode/extensions.json

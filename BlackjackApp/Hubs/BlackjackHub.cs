@@ -51,7 +51,7 @@ public class BlackjackHub : Hub
                 }
             }
         }
-        else
+        else if (existingConnectionId != null)
         {
             // Reconnecting creator: update their stored connection ID to the new one
             var slot = game.Players.FirstOrDefault(p => p.ConnectionId == existingConnectionId);

@@ -1,0 +1,27 @@
+name: Build
+
+on:
+  pull_request:
+    branches: [ dev, main ]
+  push:
+    branches: [ dev, main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '9.0.x'
+      - name: Restore
+        run: dotnet restore BlackjackApp/BlackjackApp.csproj
+      - name: Build
+        run: dotnet build BlackjackApp/BlackjackApp.csproj --no-restore --configuration Release
+      - name: Publish
+        run: dotnet publish BlackjackApp/BlackjackApp.csproj --no-restore --configuration Release --output ./artifacts/publish

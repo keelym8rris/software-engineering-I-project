@@ -2,59 +2,66 @@
 
 A real-time multiplayer Blackjack game built with Blazor Server and SignalR.
 
+## Branches and environments
+
+This repository uses `main` as the production branch. There is no branch named `master`.
+
+| Branch | Purpose |
+| --- | --- |
+| `main` | Production source of truth |
+| `dev` | Integration and pre-production; currently reset to the same commit as `main` |
+| `keelym8rris/*` | Personal work branches; open pull requests into `dev` |
+
+After changes pass the build on `dev`, promote them to `main` with a pull request. Configure a future DigitalOcean web service to build from `main`; a separate staging service can build from `dev`.
+
 ## Requirements
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8)
+- .NET 9 SDK
+- Docker Desktop (optional, for running the container locally)
+- Visual Studio Code with the C# Dev Kit extension (optional)
 
-Check your version:
-```
-dotnet --version
-```
-Should output `8.x.x`.
+The repository pins the .NET 9 SDK family in `global.json`. Check that the SDK is available with:
 
-## Running the app
-
-```
-dotnet run --project BlackjackApp
+```sh
+dotnet --list-sdks
 ```
 
-Then open `http://localhost:5400` in your browser.
+## Run and try the app
 
-To test multiplayer, open the same URL in a second browser tab or window.
+From the repository root, in a VS Code terminal or another terminal:
+
+```sh
+dotnet restore BlackjackApp/BlackjackApp.csproj
+dotnet run --project BlackjackApp/BlackjackApp.csproj
+```
+
+Open <http://localhost:5400>. For a multiplayer smoke check, open a second browser tab, create a game in the first tab, then join it from the second. The `/healthz` endpoint returns HTTP 200 when the web process is running.
+
+In VS Code, open the repository folder and accept the recommended C# Dev Kit extension. The project is also available in the integrated terminal using the commands above.
+
+### Run the Docker version locally
+
+```sh
+docker compose up --build
+```
+
+Then open <http://localhost:8080>. Stop it with `Ctrl+C`, then run `docker compose down` to remove the container.
+
+## Configuration and deployment
+
+Local launch settings use the `Development` environment. For a deployed container, set `ASPNETCORE_ENVIRONMENT=Production` and use port `8080`. No application secrets are currently required. If secrets are added later, keep them out of source control and configure them as runtime secrets in the hosting provider.
+
+For DigitalOcean App Platform, use the repository's root `Dockerfile`, set the web service HTTP port to `8080`, and configure the health check path as `/healthz`. Keep the service at one instance for now: game tables and player state are held in process memory, so restarts clear games and multiple instances would not share them. Public production use will need a persistence/shared-state design and a concurrency review.
+
+The app targets .NET 9 as requested. Microsoft's current support policy lists .NET 9 end of support as **November 10, 2026**. Before a public production launch after that date, upgrade the target, SDK pin, package, and container images together to .NET 10 LTS.
+
+## Build automation
+
+GitHub Actions restores, builds, and publishes the app on pull requests and pushes to `dev` and `main`. The repository does not have an automated test suite yet, so the workflow currently checks compilation and publishing only.
 
 ## How to play
 
-1. Enter your name and click **Create New Game**
-2. Share the game ID with other players — they enter their name and click **Join** on the lobby screen
-3. Once players have joined, click **Start Game** to begin the betting round
-4. Each player places a bet (use the quick-bet buttons or type an amount)
-5. Once all bets are placed, cards are dealt automatically
-6. On your turn, click **Hit** to draw a card or **Stand** to hold
-7. After all players act, the dealer draws to 17
-8. Winnings are settled automatically — blackjack pays 1.5x
-
-## Project structure
-
-```
-BlackjackApp/
-├── Hubs/
-│   └── BlackjackHub.cs       # SignalR hub — handles all game actions
-├── Models/
-│   ├── Card.cs
-│   ├── Deck.cs
-│   ├── Player.cs
-│   ├── GameState.cs
-│   └── GameDto.cs            # Wire transfer objects
-├── Services/
-│   └── GameService.cs        # Game logic (singleton)
-├── Pages/
-│   ├── Index.razor            # Lobby
-│   └── Game.razor             # Game table
-└── Program.cs
-```
-
-## Troubleshooting
-
-**Port already in use** — another process is on 5400. Either stop it or change the port in `BlackjackApp/Properties/launchSettings.json`.
-
-**Connection disconnected error** — make sure you're running .NET 8, not .NET 7. The project requires `net8.0`.
+1. Enter your name and click **Create New Game**.
+2. Share the game ID; other players enter it on the join screen.
+3. Click **Start Game**, place bets, then use **Hit** or **Stand** on your turn.
+4. After all players act, the dealer draws to 17 and winnings are settled.
