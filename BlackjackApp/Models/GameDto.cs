@@ -1,6 +1,8 @@
 namespace BlackjackApp.Models;
 
 // Flat DTOs for safe serialization over the wire — no computed properties, no null surprises
+public record GameSummary(string GameId, int PlayerCount);
+
 public class CardDto
 {
     public string Display { get; set; } = "";
@@ -21,6 +23,7 @@ public class PlayerDto
 public class GameStateDto
 {
     public string GameId { get; set; } = "";
+    public string HostConnectionId { get; set; } = "";
     public string Phase { get; set; } = "Lobby";
     public string Message { get; set; } = "";
     public List<PlayerDto> Players { get; set; } = new();
