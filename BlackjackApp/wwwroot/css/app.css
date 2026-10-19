@@ -67,6 +67,10 @@ body {
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn:not(:disabled):hover { opacity: 0.9; transform: translateY(-1px); }
 .btn:not(:disabled):active { transform: translateY(0); }
+.btn:focus-visible, .input:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+}
 
 .btn-primary { background: #f5c518; color: #1a1a1a; }
 .btn-secondary { background: rgba(255,255,255,0.2); color: #fff; }
@@ -181,6 +185,18 @@ body {
     font-weight: 600;
 }
 
+.host-badge {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    background: #d8e8a5;
+    color: #18391f;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
 .player-chips { font-size: 0.85rem; opacity: 0.8; }
 .player-bet { font-size: 0.85rem; opacity: 0.7; margin-bottom: 0.3rem; }
 .hand-value { font-size: 0.85rem; margin-top: 0.3rem; }
@@ -228,8 +244,16 @@ body {
 .quick-bets { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center; }
 
 /* Utility */
-.muted { opacity: 0.5; font-style: italic; }
-.error { color: #e74c3c; }
+.muted { color: #d4e1d6; font-style: italic; }
+.error { color: #ffd0ca; font-weight: 600; }
 .status { text-align: center; opacity: 0.7; margin-top: 2rem; }
 
 .lobby-actions { display: flex; gap: 0.5rem; }
+
+@media (max-width: 560px) {
+    .lobby { padding: 2rem 1rem; }
+    .lobby h1 { font-size: 2.25rem; }
+    .lobby-panel { padding: 1.25rem; }
+    .game-table { padding: 1rem 0.75rem; }
+    .card { width: 50px; height: 72px; font-size: 1.2rem; }
+}

@@ -1,10 +1,21 @@
 @page "/game/{GameId}"
 @using BlackjackApp.Models
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.Extensions.Logging
 @inject NavigationManager Nav
+@inject ILogger<Game> Logger
 @implements IAsyncDisposable
 
 <div class="game-table">
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <p class="error" role="alert">@_error</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(_connectionStatus))
+    {
+        <p class="status" role="status">@_connectionStatus</p>
+    }
+
     @if (_game == null)
     {
         <p class="status">Connecting to game...</p>
@@ -46,6 +57,7 @@
                     <div class="player-name">
                         @player.Name
                         @if (isMe) { <span class="you-badge">You</span> }
+                        @if (player.ConnectionId == _game.HostConnectionId) { <span class="host-badge">Host</span> }
                     </div>
                     <div class="player-chips">$ @player.Chips</div>
                     <div class="player-bet">Bet: @player.CurrentBet</div>
@@ -66,9 +78,20 @@
 
         <!-- Actions -->
         <div class="actions">
-            @if (_game.Phase == "Lobby" && _game.Players.Count > 0)
+            @if (_game.Phase == "Lobby")
             {
-                <button class="btn btn-primary" @onclick="StartBetting">Start Game</button>
+                @if (_game.HostConnectionId == _myConnectionId)
+                {
+                    <button class="btn btn-primary" @onclick="StartBetting" disabled="@(_game.Players.Count < 2)">Start Game</button>
+                    @if (_game.Players.Count < 2)
+                    {
+                        <p class="muted">At least two players are needed to start.</p>
+                    }
+                }
+                else
+                {
+                    <p class="muted">Waiting for the host to start the game.</p>
+                }
             }
             else if (_game.Phase == "Betting")
             {
@@ -121,52 +144,110 @@
     private HubConnection? _hub;
     private GameStateDto? _game;
     private string _myConnectionId = "";
+    private string _error = "";
+    private string _connectionStatus = "";
     private int _betAmount = 10;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
 
-        _hub = new HubConnectionBuilder()
-            .WithUrl(Nav.ToAbsoluteUri("/blackjackhub"))
-            .WithAutomaticReconnect()
-            .Build();
-
-        _hub.On<GameStateDto>("GameStateUpdated", state =>
+        try
         {
-            _game = state;
-            InvokeAsync(StateHasChanged);
-        });
+            _hub = new HubConnectionBuilder()
+                .WithUrl(Nav.ToAbsoluteUri("/blackjackhub"))
+                .WithAutomaticReconnect()
+                .Build();
 
-        _hub.On<string, string>("GameJoined", (_, connId) =>
+            _hub.On<GameStateDto>("GameStateUpdated", UpdateGameState);
+            _hub.On<string, string>("GameJoined", UpdateConnectionId);
+            _hub.On<string>("Error", ShowServerError);
+
+            _hub.Reconnecting += _ => InvokeAsync(() =>
+            {
+                _connectionStatus = "Connection lost. Reconnecting...";
+                StateHasChanged();
+            });
+            _hub.Reconnected += async _ =>
+            {
+                _connectionStatus = "Restoring your seat...";
+                await InvokeAsync(StateHasChanged);
+                await SendHubRequestAsync("JoinGame", GameId, GetPlayerName(), _myConnectionId);
+            };
+            _hub.Closed += _ => InvokeAsync(() =>
+            {
+                _connectionStatus = "The connection closed. Return to the home page and rejoin the game.";
+                StateHasChanged();
+            });
+
+            await _hub.StartAsync();
+            _myConnectionId = _hub.ConnectionId ?? "";
+            await SendHubRequestAsync("JoinGame", GameId, GetPlayerName(), PriorConnectionId);
+        }
+        catch (Exception ex)
         {
-            _myConnectionId = connId;
-            InvokeAsync(StateHasChanged);
-        });
-
-        _hub.On<string>("Error", msg =>
-        {
-            Console.WriteLine($"Hub error: {msg}");
-        });
-
-        await _hub.StartAsync();
-        _myConnectionId = _hub.ConnectionId ?? "";
-
-        var name = string.IsNullOrWhiteSpace(PlayerName) ? "Player" : PlayerName;
-        await _hub.SendAsync("JoinGame", GameId, name, PriorConnectionId);
-        await InvokeAsync(StateHasChanged);
+            Logger.LogError(ex, "Could not connect to game {GameId}", GameId);
+            _error = "Could not connect to this game. Return home and try joining again.";
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
-    private async Task StartBetting() => await _hub!.SendAsync("StartBetting", GameId);
-    private async Task PlaceBet() => await _hub!.SendAsync("PlaceBet", GameId, _betAmount);
+    private string GetPlayerName() => string.IsNullOrWhiteSpace(PlayerName) ? "Player" : PlayerName.Trim();
+
+    private async Task SendHubRequestAsync(string method, params object?[] args)
+    {
+        if (_hub?.State != HubConnectionState.Connected)
+        {
+            _error = "The game server is not connected. Please wait for it to reconnect.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        try
+        {
+            await _hub.SendAsync(method, args);
+            _error = "";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not send {HubMethod} for game {GameId}", method, GameId);
+            _error = "That request could not reach the game server. Please try again.";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task StartBetting() => await SendHubRequestAsync("StartBetting", GameId);
+    private async Task PlaceBet() => await SendHubRequestAsync("PlaceBet", GameId, _betAmount);
     private void QuickBet(int amount) => _betAmount = amount;
-    private async Task Hit() => await _hub!.SendAsync("Hit", GameId);
-    private async Task Stand() => await _hub!.SendAsync("Stand", GameId);
-    private async Task NewRound() => await _hub!.SendAsync("NewRound", GameId);
+    private async Task Hit() => await SendHubRequestAsync("Hit", GameId);
+    private async Task Stand() => await SendHubRequestAsync("Stand", GameId);
+    private async Task NewRound() => await SendHubRequestAsync("NewRound", GameId);
     private void LeaveGame() => Nav.NavigateTo("/");
+
+    private void UpdateGameState(GameStateDto state) => _ = InvokeAsync(() =>
+    {
+        _game = state;
+        StateHasChanged();
+    });
+
+    private void UpdateConnectionId(string ignoredGameId, string connectionId) => _ = InvokeAsync(() =>
+    {
+        _myConnectionId = connectionId;
+        _connectionStatus = "";
+        _error = "";
+        StateHasChanged();
+    });
+
+    private void ShowServerError(string message) => _ = InvokeAsync(() =>
+    {
+        _error = message;
+        StateHasChanged();
+    });
 
     public async ValueTask DisposeAsync()
     {
-        if (_hub != null) await _hub.DisposeAsync();
+        if (_hub == null) return;
+        try { await _hub.DisposeAsync(); }
+        catch (Exception ex) { Logger.LogDebug(ex, "Error disposing the connection for game {GameId}", GameId); }
     }
 }
