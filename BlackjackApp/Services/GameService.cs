@@ -200,20 +200,42 @@ public class GameService
         }
     }
 
-    public bool PlaceBet(string gameId, string connectionId, int amount)
+    public bool PlaceBet(string gameId, string connectionId, int amount, out string error)
     {
         lock (_sync)
         {
             var game = GetGameUnsafe(gameId);
             var player = game?.Players.FirstOrDefault(p => p.ConnectionId == connectionId);
-            if (player == null || game!.Phase != GamePhase.Betting) return false;
-            if (amount < 10 || amount > player.Chips) return false;
+            if (player == null)
+            {
+                error = "You are not a player in this game.";
+                return false;
+            }
+
+            if (game!.Phase != GamePhase.Betting)
+            {
+                error = "Betting is not open right now.";
+                return false;
+            }
+
+            if (amount < 10)
+            {
+                error = "The minimum bet is $10.";
+                return false;
+            }
+
+            if (amount > player.Chips)
+            {
+                error = "Your bet cannot be greater than your available balance.";
+                return false;
+            }
 
             player.CurrentBet = amount;
 
             if (game.AllBetsPlaced)
                 DealInitialCards(game);
 
+            error = "";
             return true;
         }
     }

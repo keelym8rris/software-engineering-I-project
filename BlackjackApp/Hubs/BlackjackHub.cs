@@ -95,7 +95,12 @@ public class BlackjackHub : Hub
 
     public async Task PlaceBet(string gameId, int amount)
     {
-        _gameService.PlaceBet(gameId, Context.ConnectionId, amount);
+        if (!_gameService.PlaceBet(gameId, Context.ConnectionId, amount, out var error))
+        {
+            await Clients.Caller.SendAsync("Error", error);
+            return;
+        }
+
         await BroadcastState(gameId);
     }
 
