@@ -44,15 +44,21 @@ body {
 
 .input::placeholder { color: rgba(255,255,255,0.5); }
 
-.game-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
-.game-list li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: rgba(255,255,255,0.1);
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
+.mode-options { display: grid; gap: 0.75rem; }
+.mode-options p { margin-bottom: 0.75rem; }
+.join-form { display: grid; gap: 0.75rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.2); }
+.code-input { text-transform: uppercase; letter-spacing: 0.1em; }
+
+.room-info {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1.5rem;
+    text-align: center;
+    background: rgba(0,0,0,0.3);
+    border-radius: 12px;
 }
+.room-info h2 { font-size: 1.1rem; }
+.lobby-code { font-size: 2rem; font-weight: 700; color: #f5c518; letter-spacing: 0.15em; user-select: all; }
 
 /* Buttons */
 .btn {
@@ -247,8 +253,6 @@ body {
 .muted { color: #d4e1d6; font-style: italic; }
 .error { color: #ffd0ca; font-weight: 600; }
 .status { text-align: center; opacity: 0.7; margin-top: 2rem; }
-
-.lobby-actions { display: flex; gap: 0.5rem; }
 
 #blazor-error-ui {
     display: none;

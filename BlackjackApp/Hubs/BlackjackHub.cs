@@ -15,7 +15,7 @@ public class BlackjackHub : Hub
         _logger = logger;
     }
 
-    public async Task CreateGame(string playerName)
+    public async Task CreateGame(string playerName, string mode)
     {
         var name = NormalizePlayerName(playerName);
         if (name.Length == 0)
@@ -24,13 +24,18 @@ public class BlackjackHub : Hub
             return;
         }
 
+        if (!Enum.TryParse<GameMode>(mode, true, out var gameMode) || !Enum.IsDefined(gameMode))
+        {
+            await Clients.Caller.SendAsync("Error", "Choose Solo or Multiplayer before creating a game.");
+            return;
+        }
+
         string? gameId = null;
         try
         {
-            gameId = _gameService.CreateGame(Context.ConnectionId, name);
+            gameId = _gameService.CreateGame(Context.ConnectionId, name, gameMode);
             await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
             await BroadcastState(gameId);
-            await BroadcastOpenGames();
             await Clients.Caller.SendAsync("GameCreated", gameId, Context.ConnectionId);
         }
         catch (Exception ex)
@@ -42,12 +47,6 @@ public class BlackjackHub : Hub
                 catch (Exception cleanupException)
                 {
                     _logger.LogWarning(cleanupException, "Could not remove failed game {GameId} from its SignalR group", gameId);
-                }
-
-                try { await BroadcastOpenGames(); }
-                catch (Exception refreshException)
-                {
-                    _logger.LogDebug(refreshException, "Could not refresh the open game list after rolling back {GameId}", gameId);
                 }
             }
 
@@ -62,6 +61,7 @@ public class BlackjackHub : Hub
 
     public async Task JoinGame(string gameId, string playerName, string? existingConnectionId = null)
     {
+        gameId = gameId?.Trim().ToUpperInvariant() ?? "";
         var name = NormalizePlayerName(playerName);
         if (name.Length == 0)
         {
@@ -78,7 +78,6 @@ public class BlackjackHub : Hub
         await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
         await Clients.Caller.SendAsync("GameJoined", gameId, Context.ConnectionId);
         await BroadcastState(gameId);
-        await BroadcastOpenGames();
     }
 
     public async Task StartBetting(string gameId)
@@ -90,7 +89,6 @@ public class BlackjackHub : Hub
         }
 
         await BroadcastState(gameId);
-        await BroadcastOpenGames();
     }
 
     public async Task PlaceBet(string gameId, int amount)
@@ -122,11 +120,6 @@ public class BlackjackHub : Hub
         await BroadcastState(gameId);
     }
 
-    public async Task GetOpenGames()
-    {
-        await Clients.Caller.SendAsync("OpenGames", _gameService.GetOpenGameSummaries());
-    }
-
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         await base.OnDisconnectedAsync(exception);
@@ -138,7 +131,6 @@ public class BlackjackHub : Hub
         if (_gameService.RemovePlayer(gameId, Context.ConnectionId))
         {
             await BroadcastState(gameId);
-            await BroadcastOpenGames();
         }
     }
 
@@ -148,9 +140,6 @@ public class BlackjackHub : Hub
         if (dto == null) return;
         await Clients.Group(gameId).SendAsync("GameStateUpdated", dto);
     }
-
-    private Task BroadcastOpenGames() =>
-        Clients.All.SendAsync("OpenGames", _gameService.GetOpenGameSummaries());
 
     private static string NormalizePlayerName(string? name)
     {

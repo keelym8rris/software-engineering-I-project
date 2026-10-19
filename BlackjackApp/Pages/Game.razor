@@ -18,34 +18,54 @@
 
     @if (_game == null)
     {
-        <p class="status">Connecting to game...</p>
+        @if (string.IsNullOrWhiteSpace(_error))
+        {
+            <p class="status">Connecting to game...</p>
+        }
+        else
+        {
+            <button class="btn btn-secondary" @onclick="LeaveGame">Back to game selection</button>
+        }
     }
     else
     {
         <div class="game-header">
-            <span class="game-id">Game: @GameId</span>
+            <span class="game-id">@_game.Mode Blackjack</span>
             <span class="phase-badge">@_game.Phase</span>
             <span class="message">@_game.Message</span>
         </div>
 
+        @if (_game.Phase == "Lobby" && _game.Mode == "Multiplayer")
+        {
+            <section class="room-info" aria-labelledby="lobby-code-heading">
+                <h2 id="lobby-code-heading">Lobby code</h2>
+                <code class="lobby-code">@_game.GameId</code>
+                <p>Share this code with your friends. Choose Multiplayer and enter the code to join.</p>
+                <p class="muted">@_game.Players.Count / 6 players</p>
+            </section>
+        }
+
         <!-- Dealer -->
-        <div class="dealer-area">
-            <h3>Dealer @(_game.Phase == "Playing" ? "" : $"— {_game.Dealer.HandValue}")</h3>
-            <div class="hand">
-                @for (int i = 0; i < _game.Dealer.Hand.Count; i++)
-                {
-                    var card = _game.Dealer.Hand[i];
-                    @if (i == 1 && _game.Phase == "Playing")
+        @if (_game.Phase != "Lobby")
+        {
+            <div class="dealer-area">
+                <h3>Dealer @(_game.Phase == "Playing" ? "" : $"— {_game.Dealer.HandValue}")</h3>
+                <div class="hand">
+                    @for (int i = 0; i < _game.Dealer.Hand.Count; i++)
                     {
-                        <div class="card card-back">🂠</div>
+                        var card = _game.Dealer.Hand[i];
+                        @if (i == 1 && _game.Phase == "Playing")
+                        {
+                            <div class="card card-back">🂠</div>
+                        }
+                        else
+                        {
+                            <div class="card @(card.IsRed ? "red" : "black")">@card.Display</div>
+                        }
                     }
-                    else
-                    {
-                        <div class="card @(card.IsRed ? "red" : "black")">@card.Display</div>
-                    }
-                }
+                </div>
             </div>
-        </div>
+        }
 
         <!-- Players -->
         <div class="players-area">
@@ -82,16 +102,17 @@
             {
                 @if (_game.HostConnectionId == _myConnectionId)
                 {
-                    <button class="btn btn-primary" @onclick="StartBetting" disabled="@(_game.Players.Count < 2)">Start Game</button>
-                    @if (_game.Players.Count < 2)
+                    <button class="btn btn-primary" @onclick="StartBetting" disabled="@(_game.Mode == "Multiplayer" && _game.Players.Count < 2)">Start Game</button>
+                    @if (_game.Mode == "Multiplayer" && _game.Players.Count < 2)
                     {
-                        <p class="muted">At least two players are needed to start.</p>
+                        <p class="muted">Waiting for a friend to join with your code. Multiplayer needs at least two players.</p>
                     }
                 }
                 else
                 {
                     <p class="muted">Waiting for the host to start the game.</p>
                 }
+                <button class="btn btn-secondary" @onclick="LeaveGame">Leave Lobby</button>
             }
             else if (_game.Phase == "Betting")
             {
@@ -146,11 +167,14 @@
     private string _myConnectionId = "";
     private string _error = "";
     private string _connectionStatus = "";
+    private bool _joining;
     private int _betAmount = 10;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+
+        GameId = GameId.Trim().ToUpperInvariant();
 
         try
         {
@@ -170,8 +194,12 @@
             });
             _hub.Reconnected += async _ =>
             {
-                _connectionStatus = "Restoring your seat...";
-                await InvokeAsync(StateHasChanged);
+                await InvokeAsync(() =>
+                {
+                    _joining = true;
+                    _connectionStatus = "Restoring your seat...";
+                    StateHasChanged();
+                });
                 await SendHubRequestAsync("JoinGame", GameId, GetPlayerName(), _myConnectionId);
             };
             _hub.Closed += _ => InvokeAsync(() =>
@@ -182,6 +210,7 @@
 
             await _hub.StartAsync();
             _myConnectionId = _hub.ConnectionId ?? "";
+            _joining = true;
             await SendHubRequestAsync("JoinGame", GameId, GetPlayerName(), PriorConnectionId);
         }
         catch (Exception ex)
@@ -233,6 +262,7 @@
     private void UpdateConnectionId(string ignoredGameId, string connectionId) => _ = InvokeAsync(() =>
     {
         _myConnectionId = connectionId;
+        _joining = false;
         _connectionStatus = "";
         _error = "";
         StateHasChanged();
@@ -240,6 +270,13 @@
 
     private void ShowServerError(string message) => _ = InvokeAsync(() =>
     {
+        if (_joining)
+        {
+            _joining = false;
+            _game = null;
+            _connectionStatus = "";
+        }
+
         _error = message;
         StateHasChanged();
     });

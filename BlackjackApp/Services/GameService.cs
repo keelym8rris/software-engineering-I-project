@@ -10,11 +10,13 @@ public class GameService
     // Maps connectionId -> gameId for fast disconnect lookup
     private readonly Dictionary<string, string> _connectionIndex = new();
 
-    public string CreateGame(string hostConnectionId, string hostName)
+    public string CreateGame(string hostConnectionId, string hostName, GameMode mode)
     {
+        if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
+
         lock (_sync)
         {
-            var game = new GameState { HostConnectionId = hostConnectionId };
+            var game = new GameState { HostConnectionId = hostConnectionId, Mode = mode };
             while (_games.ContainsKey(game.GameId))
                 game.GameId = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
 
@@ -57,7 +59,7 @@ public class GameService
             error = "";
             if (!_games.TryGetValue(gameId, out var game))
             {
-                error = "Game not found.";
+                error = "No lobby found with that code. Check it and try again.";
                 return false;
             }
 
@@ -78,6 +80,12 @@ public class GameService
             if (game.Players.Any(p => p.ConnectionId == connectionId))
                 return true;
 
+            if (game.Mode == GameMode.Solo)
+            {
+                error = "This table is for solo play. Start your own solo game from the play menu.";
+                return false;
+            }
+
             if (game.Phase != GamePhase.Lobby || game.Players.Count >= 6)
             {
                 error = "Cannot join this game. It may be full or already started.";
@@ -90,15 +98,6 @@ public class GameService
         }
     }
 
-    public List<GameSummary> GetOpenGameSummaries()
-    {
-        lock (_sync)
-            return _games.Values
-                .Where(g => g.Phase == GamePhase.Lobby && g.Players.Count < 6)
-                .Select(g => new GameSummary(g.GameId, g.Players.Count))
-                .ToList();
-    }
-
     public GameStateDto? GetGameState(string gameId)
     {
         lock (_sync)
@@ -109,6 +108,7 @@ public class GameService
             {
                 GameId = game.GameId,
                 HostConnectionId = game.HostConnectionId,
+                Mode = game.Mode.ToString(),
                 Phase = game.Phase.ToString(),
                 Message = game.Message,
                 CurrentPlayerConnectionId = game.CurrentPlayer?.ConnectionId,
@@ -182,8 +182,10 @@ public class GameService
                 error = "Only the host can start the game.";
             else if (game.Phase != GamePhase.Lobby)
                 error = "This game has already started.";
-            else if (game.Players.Count < 2)
-                error = "At least two players are required to start.";
+            else if (game.Players.Count < 1)
+                error = "At least one player is required to start.";
+            else if (game.Mode == GameMode.Multiplayer && game.Players.Count < 2)
+                error = "At least two players are required for multiplayer. Share your lobby code with a friend.";
 
             if (!string.IsNullOrEmpty(error)) return false;
 
