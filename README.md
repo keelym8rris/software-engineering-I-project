@@ -9,7 +9,7 @@ This repository uses `main` as the production branch. There is no branch named `
 | Branch | Purpose |
 | --- | --- |
 | `main` | Production source of truth |
-| `dev` | Integration and pre-production; currently reset to the same commit as `main` |
+| `dev` | Integration and pre-production; starts from the current `main` baseline |
 | `keelym8rris/*` | Personal work branches; open pull requests into `dev` |
 
 After changes pass the build on `dev`, promote them to `main` with a pull request. Configure a future DigitalOcean web service to build from `main`; a separate staging service can build from `dev`.
