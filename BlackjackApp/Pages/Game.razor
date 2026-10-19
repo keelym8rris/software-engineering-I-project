@@ -100,8 +100,8 @@
                 {
                     <div class="bet-controls">
                         <label>Bet amount:</label>
-                        <input type="number" @bind="_betAmount" min="10" max="@me.Chips" step="10" class="input" />
-                        <button class="btn btn-primary" @onclick="PlaceBet" disabled="@(_betAmount < 10)">Place Bet</button>
+                        <input type="number" @bind="_betAmount" @bind:event="oninput" min="10" max="@me.Chips" step="10" class="input" />
+                        <button class="btn btn-primary" @onclick="PlaceBet" disabled="@(_betAmount < 10 || _betAmount > me.Chips)">Place Bet</button>
                     </div>
                     <div class="quick-bets">
                         @foreach (var amt in new[] { 10, 25, 50, 100 })
@@ -205,7 +205,7 @@
 
         try
         {
-            await _hub.SendAsync(method, args);
+            await _hub.SendCoreAsync(method, args);
             _error = "";
         }
         catch (Exception ex)

@@ -19,7 +19,7 @@
     else
     {
         <div class="lobby-panel">
-            <input @bind="_playerName" placeholder="Your name" maxlength="20" class="input" />
+            <input @bind="_playerName" @bind:event="oninput" placeholder="Your name" maxlength="20" class="input" />
 
             <div class="lobby-actions">
                 <button class="btn btn-primary" @onclick="CreateGame" disabled="@string.IsNullOrWhiteSpace(_playerName)">
@@ -142,7 +142,7 @@
     {
         try
         {
-            await _hub!.SendAsync(method, args);
+            await _hub!.SendCoreAsync(method, args);
         }
         catch (Exception ex)
         {
