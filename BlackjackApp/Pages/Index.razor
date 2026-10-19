@@ -1,4 +1,6 @@
 ﻿@page "/"
+@page "/play"
+@using BlackjackApp.Models
 @using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.Extensions.Logging
 @inject NavigationManager Nav
@@ -19,33 +21,43 @@
     else
     {
         <div class="lobby-panel">
-            <input @bind="_playerName" @bind:event="oninput" placeholder="Your name" maxlength="20" class="input" />
-
-            <div class="lobby-actions">
-                <button class="btn btn-primary" @onclick="CreateGame" disabled="@string.IsNullOrWhiteSpace(_playerName)">
-                    Create New Game
-                </button>
-            </div>
-
-            @if (_openGames.Count > 0)
+            @if (_selectedMode == null)
             {
-                <h3>Open Games</h3>
-                <ul class="game-list">
-                    @foreach (var g in _openGames)
-                    {
-                        <li>
-                            <span>Game @g.GameId — @g.PlayerCount player(s)</span>
-                            <button class="btn btn-secondary" @onclick="() => JoinGame(g.GameId)"
-                                    disabled="@string.IsNullOrWhiteSpace(_playerName)">
-                                Join
-                            </button>
-                        </li>
-                    }
-                </ul>
+                <h2>How would you like to play?</h2>
+                <div class="mode-options">
+                    <button class="btn btn-primary" @onclick="() => SelectMode(GameMode.Solo)">Solo</button>
+                    <p class="muted">Play against the house dealer on your own.</p>
+                    <button class="btn btn-secondary" @onclick="() => SelectMode(GameMode.Multiplayer)">Multiplayer</button>
+                    <p class="muted">Host a lobby for friends or join one with a code.</p>
+                </div>
             }
             else
             {
-                <p class="muted">No open games. Create one!</p>
+                <h2>@_selectedMode</h2>
+                <label for="player-name">Your name</label>
+                <input id="player-name" @bind="_playerName" @bind:event="oninput" placeholder="Your name" maxlength="20" class="input" />
+
+                @if (_selectedMode == GameMode.Solo)
+                {
+                    <p class="muted">Your own table, with the dealer controlled by the game.</p>
+                    <button class="btn btn-primary" @onclick="CreateGame" disabled="@(_creating || string.IsNullOrWhiteSpace(_playerName))">
+                        @(_creating ? "Creating..." : "Start Solo Game")
+                    </button>
+                }
+                else
+                {
+                    <p class="muted">Create a lobby and share its code with your friends.</p>
+                    <button class="btn btn-primary" @onclick="CreateGame" disabled="@(_creating || string.IsNullOrWhiteSpace(_playerName))">
+                        @(_creating ? "Creating..." : "Host Lobby")
+                    </button>
+                    <form class="join-form" @onsubmit="JoinLobby" @onsubmit:preventDefault>
+                        <label for="lobby-code">Have a lobby code?</label>
+                        <input id="lobby-code" @bind="_lobbyCode" @bind:event="oninput" placeholder="8-character lobby code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" class="input code-input" />
+                        <button type="submit" class="btn btn-secondary" disabled="@(_creating || string.IsNullOrWhiteSpace(_playerName) || string.IsNullOrWhiteSpace(_lobbyCode))">Join Lobby</button>
+                    </form>
+                }
+
+                <button class="btn btn-secondary" @onclick="BackToModes" disabled="@_creating">Back</button>
             }
 
             @if (!string.IsNullOrEmpty(_error))
@@ -61,9 +73,9 @@
     private string _playerName = "";
     private string _error = "";
     private bool _connected = false;
-    private List<GameSummary> _openGames = new();
-
-    record GameSummary(string GameId, int PlayerCount);
+    private GameMode? _selectedMode;
+    private string _lobbyCode = "";
+    private bool _creating;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -77,33 +89,31 @@
                 .Build();
 
             _hub.On<string, string>("GameCreated", NavigateToGame);
-            _hub.On<string, string>("GameJoined", NavigateToGame);
             _hub.On<string>("Error", ShowServerError);
-            _hub.On<List<GameSummary>>("OpenGames", UpdateOpenGames);
 
             _hub.Reconnecting += exception => InvokeAsync(() =>
             {
                 _connected = false;
+                _creating = false;
                 _error = "Connection lost. Reconnecting...";
                 StateHasChanged();
             });
-            _hub.Reconnected += _ => InvokeAsync(async () =>
+            _hub.Reconnected += _ => InvokeAsync(() =>
             {
                 _connected = true;
                 _error = "";
-                await SendHubRequestAsync("GetOpenGames");
                 StateHasChanged();
             });
             _hub.Closed += exception => InvokeAsync(() =>
             {
                 _connected = false;
+                _creating = false;
                 _error = "The connection closed. Refresh the page to try again.";
                 StateHasChanged();
             });
 
             await _hub.StartAsync();
             _connected = true;
-            await SendHubRequestAsync("GetOpenGames");
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
@@ -115,41 +125,57 @@
         }
     }
 
+    private void SelectMode(GameMode mode)
+    {
+        _selectedMode = mode;
+        _error = "";
+    }
+
+    private void BackToModes()
+    {
+        _selectedMode = null;
+        _error = "";
+    }
+
     private async Task CreateGame()
     {
-        if (!string.IsNullOrWhiteSpace(_playerName))
-            await SendHubRequestAsync("CreateGame", _playerName.Trim());
-    }
+        if (_creating || _selectedMode == null || string.IsNullOrWhiteSpace(_playerName)) return;
 
-    private async Task JoinGame(string gameId)
-    {
-        if (!string.IsNullOrWhiteSpace(_playerName))
-            await SendHubRequestAsync("JoinGame", gameId, _playerName.Trim(), (string?)null);
-    }
-
-    private Task SendHubRequestAsync(string method, params object?[] args)
-    {
         if (_hub?.State != HubConnectionState.Connected)
         {
             _error = "The game server is not connected. Refresh the page to try again.";
-            return InvokeAsync(StateHasChanged);
+            return;
         }
 
-        return SendHubRequestCoreAsync(method, args);
-    }
-
-    private async Task SendHubRequestCoreAsync(string method, object?[] args)
-    {
+        _creating = true;
+        _error = "";
         try
         {
-            await _hub!.SendCoreAsync(method, args);
+            await _hub.InvokeAsync("CreateGame", _playerName.Trim(), _selectedMode.Value.ToString());
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "Could not send {HubMethod} from the home screen", method);
-            _error = "That request could not reach the game server. Please try again.";
-            await InvokeAsync(StateHasChanged);
+            Logger.LogWarning(ex, "Could not create a game from the play menu");
+            _error = "The game could not be created. Please try again.";
         }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    private void JoinLobby()
+    {
+        if (_creating || string.IsNullOrWhiteSpace(_playerName)) return;
+
+        var code = _lobbyCode.Trim().ToUpperInvariant();
+        if (code.Length != 8 || !code.All(Uri.IsHexDigit))
+        {
+            _error = "Enter the 8-character code shown in your friend's lobby.";
+            return;
+        }
+
+        Nav.NavigateTo($"/game/{code}?name={Uri.EscapeDataString(_playerName.Trim())}");
     }
 
     private void NavigateToGame(string gameId, string connectionId) =>
@@ -159,12 +185,7 @@
     private void ShowServerError(string message) => _ = InvokeAsync(() =>
     {
         _error = message;
-        StateHasChanged();
-    });
-
-    private void UpdateOpenGames(List<GameSummary> games) => _ = InvokeAsync(() =>
-    {
-        _openGames = games;
+        _creating = false;
         StateHasChanged();
     });
 
