@@ -24,7 +24,7 @@ public class GameService
             _games.Add(game.GameId, game);
             try
             {
-                _decks.Add(game.GameId, new Deck());
+                _decks.Add(game.GameId, new Deck(deckCount: 6));
             }
             catch
             {
@@ -112,8 +112,8 @@ public class GameService
                 Phase = game.Phase.ToString(),
                 Message = game.Message,
                 CurrentPlayerConnectionId = game.CurrentPlayer?.ConnectionId,
-                Dealer = MapPlayer(game.Dealer),
-                Players = game.Players.Select(MapPlayer).ToList()
+                Dealer = MapPlayer(game.Dealer, game.Phase == GamePhase.Playing),
+                Players = game.Players.Select(player => MapPlayer(player)).ToList()
             };
         }
     }
@@ -220,6 +220,12 @@ public class GameService
                 return false;
             }
 
+            if (player.CurrentBet > 0)
+            {
+                error = "You have already placed a bet for this round.";
+                return false;
+            }
+
             if (amount < 10)
             {
                 error = "The minimum bet is $10.";
@@ -248,12 +254,17 @@ public class GameService
         {
             var game = GetGameUnsafe(gameId);
             var player = game?.CurrentPlayer;
-            if (player == null || player.ConnectionId != connectionId) return false;
+            if (player == null || player.ConnectionId != connectionId || player.Status != PlayerStatus.Playing) return false;
 
             player.Hand.Add(_decks[gameId].Deal());
             if (player.IsBusted)
             {
                 player.Status = PlayerStatus.Busted;
+                AdvancePlayer(game!);
+            }
+            else if (player.HandValue == 21)
+            {
+                player.Status = PlayerStatus.Standing;
                 AdvancePlayer(game!);
             }
             return true;
@@ -266,7 +277,7 @@ public class GameService
         {
             var game = GetGameUnsafe(gameId);
             var player = game?.CurrentPlayer;
-            if (player == null || player.ConnectionId != connectionId) return false;
+            if (player == null || player.ConnectionId != connectionId || player.Status != PlayerStatus.Playing) return false;
 
             player.Status = PlayerStatus.Standing;
             AdvancePlayer(game!);
@@ -274,12 +285,12 @@ public class GameService
         }
     }
 
-    public void ResetRound(string gameId)
+    public bool ResetRound(string gameId)
     {
         lock (_sync)
         {
             var game = GetGameUnsafe(gameId);
-            if (game == null) return;
+            if (game == null || game.Phase != GamePhase.RoundOver) return false;
 
             var eliminated = game.Players.Where(p => p.Chips <= 0).ToList();
             foreach (var player in eliminated)
@@ -292,7 +303,7 @@ public class GameService
             {
                 _games.Remove(gameId);
                 _decks.Remove(gameId);
-                return;
+                return true;
             }
 
             if (!game.Players.Any(p => p.ConnectionId == game.HostConnectionId))
@@ -300,26 +311,37 @@ public class GameService
 
             game.Phase = GamePhase.Lobby;
             game.Message = "Waiting for players...";
+            return true;
         }
     }
 
     private GameState? GetGameUnsafe(string gameId) =>
         _games.TryGetValue(gameId, out var game) ? game : null;
 
-    private static PlayerDto MapPlayer(Player player) => new()
+    private static PlayerDto MapPlayer(Player player, bool hideHoleCard = false) => new()
     {
         ConnectionId = player.ConnectionId,
         Name = player.Name,
         Chips = player.Chips,
         CurrentBet = player.CurrentBet,
-        HandValue = player.HandValue,
+        HandValue = hideHoleCard ? 0 : player.HandValue,
         Status = player.Status.ToString(),
-        Hand = player.Hand.Select(card => new CardDto { Display = card.Display, IsRed = card.IsRed }).ToList()
+        Hand = player.Hand.Select((card, index) =>
+        {
+            var isHidden = hideHoleCard && index == 1;
+            return new CardDto
+            {
+                Display = isHidden ? "" : card.Display,
+                IsRed = !isHidden && card.IsRed,
+                IsHidden = isHidden
+            };
+        }).ToList()
     };
 
     private void DealInitialCards(GameState game)
     {
         var deck = _decks[game.GameId];
+        deck.Reset();
         foreach (var p in game.Players) { p.Hand.Add(deck.Deal()); p.Hand.Add(deck.Deal()); }
         game.Dealer.Hand.Add(deck.Deal());
         game.Dealer.Hand.Add(deck.Deal());
@@ -329,7 +351,7 @@ public class GameService
         game.Message = $"{game.Players[0].Name}'s turn";
 
         foreach (var p in game.Players)
-            if (p.HasBlackjack) p.Status = PlayerStatus.Blackjack;
+            p.Status = p.HasBlackjack ? PlayerStatus.Blackjack : PlayerStatus.Playing;
 
         AdvanceIfNeeded(game);
     }
@@ -337,7 +359,7 @@ public class GameService
     private void AdvanceIfNeeded(GameState game)
     {
         while (game.CurrentPlayerIndex < game.Players.Count &&
-               game.Players[game.CurrentPlayerIndex].Status != PlayerStatus.Waiting)
+               game.Players[game.CurrentPlayerIndex].Status != PlayerStatus.Playing)
         {
             game.CurrentPlayerIndex++;
         }

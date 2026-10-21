@@ -8,7 +8,7 @@ public class Player
     public string Name { get; set; } = "";
     public List<Card> Hand { get; set; } = new();
     public PlayerStatus Status { get; set; } = PlayerStatus.Waiting;
-    public int Chips { get; set; } = 1000;
+    public decimal Chips { get; set; } = 1000m;
     public int CurrentBet { get; set; } = 0;
     public bool IsDealer { get; set; } = false;
 

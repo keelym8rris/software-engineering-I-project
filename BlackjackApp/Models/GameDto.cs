@@ -5,6 +5,7 @@ public class CardDto
 {
     public string Display { get; set; } = "";
     public bool IsRed { get; set; }
+    public bool IsHidden { get; set; }
 }
 
 public class PlayerDto
@@ -13,7 +14,7 @@ public class PlayerDto
     public string Name { get; set; } = "";
     public List<CardDto> Hand { get; set; } = new();
     public string Status { get; set; } = "Waiting";
-    public int Chips { get; set; }
+    public decimal Chips { get; set; }
     public int CurrentBet { get; set; }
     public int HandValue { get; set; }
 }

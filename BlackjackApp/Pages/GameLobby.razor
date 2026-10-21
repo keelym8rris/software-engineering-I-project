@@ -1,0 +1,169 @@
+@page "/create"
+@page "/join"
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.Extensions.Logging
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject ILogger<GameLobby> Logger
+@implements IAsyncDisposable
+
+<PageTitle>Blackjack | @(IsCreatePage ? "Create a game" : "Join a game")</PageTitle>
+
+<main class="lobby">
+    <a class="lobby-home-link" href="/">Back to home</a>
+    <h1>@(IsCreatePage ? "Create a game" : "Join a game")</h1>
+
+    <section class="lobby-panel" aria-label="@(IsCreatePage ? "Create a game" : "Join a game")">
+        <label for="player-name">Your name</label>
+        <input id="player-name" @bind="_playerName" maxlength="20" autocomplete="nickname" placeholder="Enter your name" class="input" />
+
+        @if (IsCreatePage)
+        {
+            @if (!_connected)
+            {
+                <p class="status">@(_error.Length == 0 ? "Connecting..." : "The game server is unavailable.")</p>
+            }
+            <p>Start a multiplayer table and share its lobby code with your friends.</p>
+            <button class="btn btn-primary" @onclick="CreateGame" disabled="@(!_connected || _creating || string.IsNullOrWhiteSpace(_playerName))">
+                @(_creating ? "Creating..." : "Create game")
+            </button>
+        }
+        else
+        {
+            <p>Enter the 8-character code shared by the host.</p>
+            <label for="lobby-code">Lobby code</label>
+            <input id="lobby-code" @bind="_lobbyCode" @bind:event="oninput" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" class="input code-input" />
+            <button class="btn btn-primary" @onclick="JoinGame" disabled="@(_creating || string.IsNullOrWhiteSpace(_playerName) || string.IsNullOrWhiteSpace(_lobbyCode))">
+                Join game
+            </button>
+        }
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p class="error" role="alert">@_error</p>
+        }
+    </section>
+</main>
+
+@code {
+    private const string PlayerNameStorageKey = "blackjack.playerName";
+
+    private HubConnection? _hub;
+    private string _playerName = "";
+    private string _lobbyCode = "";
+    private string _error = "";
+    private bool _connected;
+    private bool _creating;
+
+    private bool IsCreatePage => Nav.ToBaseRelativePath(Nav.Uri).TrimEnd('/') == "create";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _playerName = await JS.InvokeAsync<string?>("localStorage.getItem", PlayerNameStorageKey) ?? "";
+        if (!IsCreatePage)
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        try
+        {
+            _hub = new HubConnectionBuilder()
+                .WithUrl(Nav.ToAbsoluteUri("/blackjackhub"))
+                .WithAutomaticReconnect()
+                .Build();
+            _hub.On<string, string>("GameCreated", NavigateToGame);
+            _hub.On<string>("Error", ShowServerError);
+            _hub.Reconnecting += _ => InvokeAsync(() =>
+            {
+                _connected = false;
+                _error = "Connection lost. Reconnecting...";
+                StateHasChanged();
+            });
+            _hub.Reconnected += _ => InvokeAsync(() =>
+            {
+                _connected = true;
+                _error = "";
+                StateHasChanged();
+            });
+            _hub.Closed += _ => InvokeAsync(() =>
+            {
+                _connected = false;
+                _error = "The connection closed. Refresh the page to try again.";
+                StateHasChanged();
+            });
+
+            await _hub.StartAsync();
+            _connected = true;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not connect to the blackjack server");
+            _error = "Could not connect to the game server. Refresh the page to try again.";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task CreateGame()
+    {
+        if (!_connected || _creating || string.IsNullOrWhiteSpace(_playerName)) return;
+
+        _creating = true;
+        _error = "";
+        try
+        {
+            _playerName = _playerName.Trim();
+            await SavePlayerName();
+            await _hub!.InvokeAsync("CreateGame", _playerName, "Multiplayer");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not create a multiplayer game");
+            _error = "The game could not be created. Please try again.";
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    private async Task JoinGame()
+    {
+        if (_creating || string.IsNullOrWhiteSpace(_playerName)) return;
+
+        var code = _lobbyCode.Trim().ToUpperInvariant();
+        if (code.Length != 8 || !code.All(Uri.IsHexDigit))
+        {
+            _error = "Enter the 8-character code shown in the host's lobby.";
+            return;
+        }
+
+        _playerName = _playerName.Trim();
+        await SavePlayerName();
+        Nav.NavigateTo($"/game/{code}?name={Uri.EscapeDataString(_playerName)}");
+    }
+
+    private Task SavePlayerName() =>
+        JS.InvokeVoidAsync("localStorage.setItem", PlayerNameStorageKey, _playerName).AsTask();
+
+    private void NavigateToGame(string gameId, string connectionId) =>
+        _ = InvokeAsync(() => Nav.NavigateTo(
+            $"/game/{gameId}?name={Uri.EscapeDataString(_playerName)}&connId={Uri.EscapeDataString(connectionId)}"));
+
+    private void ShowServerError(string message) => _ = InvokeAsync(() =>
+    {
+        _error = message;
+        _creating = false;
+        StateHasChanged();
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub == null) return;
+        try { await _hub.DisposeAsync(); }
+        catch (Exception ex) { Logger.LogDebug(ex, "Error disposing the game lobby connection"); }
+    }
+}

@@ -54,9 +54,9 @@
                     @for (int i = 0; i < _game.Dealer.Hand.Count; i++)
                     {
                         var card = _game.Dealer.Hand[i];
-                        @if (i == 1 && _game.Phase == "Playing")
+                        @if (card.IsHidden)
                         {
-                            <div class="card card-back">🂠</div>
+                            <div class="card card-back"></div>
                         }
                         else
                         {

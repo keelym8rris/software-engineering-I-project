@@ -104,19 +104,31 @@ public class BlackjackHub : Hub
 
     public async Task Hit(string gameId)
     {
-        _gameService.Hit(gameId, Context.ConnectionId);
+        if (!_gameService.Hit(gameId, Context.ConnectionId))
+        {
+            await Clients.Caller.SendAsync("Error", "You can only hit during your turn.");
+            return;
+        }
         await BroadcastState(gameId);
     }
 
     public async Task Stand(string gameId)
     {
-        _gameService.Stand(gameId, Context.ConnectionId);
+        if (!_gameService.Stand(gameId, Context.ConnectionId))
+        {
+            await Clients.Caller.SendAsync("Error", "You can only stand during your turn.");
+            return;
+        }
         await BroadcastState(gameId);
     }
 
     public async Task NewRound(string gameId)
     {
-        _gameService.ResetRound(gameId);
+        if (!_gameService.ResetRound(gameId))
+        {
+            await Clients.Caller.SendAsync("Error", "A new round can only start after the current round is over.");
+            return;
+        }
         await BroadcastState(gameId);
     }
 

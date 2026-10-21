@@ -1,0 +1,29 @@
+@page "/instructions"
+
+<PageTitle>Blackjack | How to play</PageTitle>
+
+<main class="instructions">
+    <a class="lobby-home-link" href="/">← Back to home</a>
+    <p class="home-eyebrow">A QUICK GUIDE</p>
+    <h1>How to play Blackjack</h1>
+    <p class="instructions-intro">Get as close to 21 as you can without going over. Beat the dealer's hand to win.</p>
+
+    <section class="instruction-card" aria-labelledby="goal-heading">
+        <h2 id="goal-heading">The goal</h2>
+        <p>Number cards are worth their number, face cards are worth 10, and aces count as 1 or 11. A hand over 21 busts. An ace counts as 11 when possible without busting, otherwise it counts as 1.</p>
+    </section>
+    <section class="instruction-card" aria-labelledby="round-heading">
+        <h2 id="round-heading">A round in three steps</h2>
+        <ol>
+            <li>Join or create a table. When the game starts, place your bet.</li>
+            <li>On your turn, choose <strong>Hit</strong> to take another card or <strong>Stand</strong> to keep your hand. A hand that reaches 21 stands automatically.</li>
+            <li>After everyone finishes, the dealer reveals their hand and draws until reaching at least 17. The dealer stands on all 17s, including soft 17.</li>
+            <li>The closest hand to 21 without busting wins. A tie is a push and your bet is returned. A two-card 21 (an ace and a 10-value card) beats other 21s and pays 3:2; if both you and the dealer have blackjack, it is a push.</li>
+        </ol>
+    </section>
+    <section class="instruction-card" aria-labelledby="table-heading">
+        <h2 id="table-heading">This table's rules</h2>
+        <p>This version supports hit and stand, with a minimum bet of 10 chips. Splitting, doubling down, and insurance are not available.</p>
+    </section>
+    <a class="btn btn-primary instructions-cta" href="/">Ready to play</a>
+</main>
