@@ -4,59 +4,75 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace BlackjackApp.Hubs;
 
-public record GameSummary(string GameId, int PlayerCount);
-
 public class BlackjackHub : Hub
 {
     private readonly GameService _gameService;
+    private readonly ILogger<BlackjackHub> _logger;
 
-    public BlackjackHub(GameService gameService) => _gameService = gameService;
-
-    public async Task CreateGame(string playerName)
+    public BlackjackHub(GameService gameService, ILogger<BlackjackHub> logger)
     {
-        var game = _gameService.CreateGame();
-        // Add player WITHOUT registering their lobby connection in the disconnect index.
-        // The lobby connection will disconnect on navigation — we don't want that to remove the player.
-        // The game-page connection will register itself via JoinGame/UpdateConnectionId.
-        _gameService.AddPlayerNoIndex(game.GameId, Context.ConnectionId, playerName);
-        await Groups.AddToGroupAsync(Context.ConnectionId, game.GameId);
-        await Clients.Caller.SendAsync("GameCreated", game.GameId, Context.ConnectionId);
-        await BroadcastState(game.GameId);
+        _gameService = gameService;
+        _logger = logger;
+    }
+
+    public async Task CreateGame(string playerName, string mode)
+    {
+        var name = NormalizePlayerName(playerName);
+        if (name.Length == 0)
+        {
+            await Clients.Caller.SendAsync("Error", "Enter your name before creating a game.");
+            return;
+        }
+
+        if (!Enum.TryParse<GameMode>(mode, true, out var gameMode) || !Enum.IsDefined(gameMode))
+        {
+            await Clients.Caller.SendAsync("Error", "Choose Solo or Multiplayer before creating a game.");
+            return;
+        }
+
+        string? gameId = null;
+        try
+        {
+            gameId = _gameService.CreateGame(Context.ConnectionId, name, gameMode);
+            await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
+            await BroadcastState(gameId);
+            await Clients.Caller.SendAsync("GameCreated", gameId, Context.ConnectionId);
+        }
+        catch (Exception ex)
+        {
+            if (gameId != null)
+            {
+                _gameService.DeleteGame(gameId);
+                try { await Groups.RemoveFromGroupAsync(Context.ConnectionId, gameId); }
+                catch (Exception cleanupException)
+                {
+                    _logger.LogWarning(cleanupException, "Could not remove failed game {GameId} from its SignalR group", gameId);
+                }
+            }
+
+            _logger.LogError(ex, "Could not create a game for connection {ConnectionId}", Context.ConnectionId);
+            try { await Clients.Caller.SendAsync("Error", "The game could not be created. Please try again."); }
+            catch (Exception sendException)
+            {
+                _logger.LogDebug(sendException, "Could not return the game creation error to the caller");
+            }
+        }
     }
 
     public async Task JoinGame(string gameId, string playerName, string? existingConnectionId = null)
     {
-        var game = _gameService.GetGame(gameId);
-        if (game == null)
+        gameId = gameId?.Trim().ToUpperInvariant() ?? "";
+        var name = NormalizePlayerName(playerName);
+        if (name.Length == 0)
         {
-            await Clients.Caller.SendAsync("Error", "Game not found.");
+            await Clients.Caller.SendAsync("Error", "Enter your name before joining a game.");
             return;
         }
 
-        // If the caller already has a slot (matched by prior connection ID passed from the client)
-        // just re-add them to the SignalR group without duplicating the player record
-        var alreadyInGame = existingConnectionId != null &&
-                            game.Players.Any(p => p.ConnectionId == existingConnectionId);
-
-        if (!alreadyInGame)
+        if (!_gameService.TryJoinGame(gameId, Context.ConnectionId, name, existingConnectionId, out var error))
         {
-            // New joiner — update connection ID on any existing slot or add fresh
-            var existing = game.Players.FirstOrDefault(p => p.ConnectionId == Context.ConnectionId);
-            if (existing == null)
-            {
-                if (!_gameService.AddPlayer(gameId, Context.ConnectionId, playerName))
-                {
-                    await Clients.Caller.SendAsync("Error", "Cannot join game — it may be full or already started.");
-                    return;
-                }
-            }
-        }
-        else
-        {
-            // Reconnecting creator: update their stored connection ID to the new one
-            var slot = game.Players.FirstOrDefault(p => p.ConnectionId == existingConnectionId);
-            if (slot != null)
-                _gameService.UpdateConnectionId(gameId, existingConnectionId, Context.ConnectionId);
+            await Clients.Caller.SendAsync("Error", error);
+            return;
         }
 
         await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
@@ -66,40 +82,54 @@ public class BlackjackHub : Hub
 
     public async Task StartBetting(string gameId)
     {
-        _gameService.StartBetting(gameId);
+        if (!_gameService.StartBetting(gameId, Context.ConnectionId, out var error))
+        {
+            await Clients.Caller.SendAsync("Error", error);
+            return;
+        }
+
         await BroadcastState(gameId);
     }
 
     public async Task PlaceBet(string gameId, int amount)
     {
-        _gameService.PlaceBet(gameId, Context.ConnectionId, amount);
+        if (!_gameService.PlaceBet(gameId, Context.ConnectionId, amount, out var error))
+        {
+            await Clients.Caller.SendAsync("Error", error);
+            return;
+        }
+
         await BroadcastState(gameId);
     }
 
     public async Task Hit(string gameId)
     {
-        _gameService.Hit(gameId, Context.ConnectionId);
+        if (!_gameService.Hit(gameId, Context.ConnectionId))
+        {
+            await Clients.Caller.SendAsync("Error", "You can only hit during your turn.");
+            return;
+        }
         await BroadcastState(gameId);
     }
 
     public async Task Stand(string gameId)
     {
-        _gameService.Stand(gameId, Context.ConnectionId);
+        if (!_gameService.Stand(gameId, Context.ConnectionId))
+        {
+            await Clients.Caller.SendAsync("Error", "You can only stand during your turn.");
+            return;
+        }
         await BroadcastState(gameId);
     }
 
     public async Task NewRound(string gameId)
     {
-        _gameService.ResetRound(gameId);
+        if (!_gameService.ResetRound(gameId))
+        {
+            await Clients.Caller.SendAsync("Error", "A new round can only start after the current round is over.");
+            return;
+        }
         await BroadcastState(gameId);
-    }
-
-    public async Task GetOpenGames()
-    {
-        var games = _gameService.GetOpenGames()
-            .Select(g => new GameSummary(g.GameId, g.Players.Count))
-            .ToList();
-        await Clients.Caller.SendAsync("OpenGames", games);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
@@ -110,39 +140,22 @@ public class BlackjackHub : Hub
         var gameId = _gameService.FindGameForConnection(Context.ConnectionId);
         if (gameId == null) return;
 
-        _gameService.RemovePlayer(gameId, Context.ConnectionId);
-
-        var game = _gameService.GetGame(gameId);
-        if (game != null)
+        if (_gameService.RemovePlayer(gameId, Context.ConnectionId))
+        {
             await BroadcastState(gameId);
+        }
     }
 
     private async Task BroadcastState(string gameId)
     {
-        var game = _gameService.GetGame(gameId);
-        if (game == null) return;
-
-        var dto = new GameStateDto
-        {
-            GameId = game.GameId,
-            Phase = game.Phase.ToString(),
-            Message = game.Message,
-            CurrentPlayerConnectionId = game.CurrentPlayer?.ConnectionId,
-            Dealer = MapPlayer(game.Dealer),
-            Players = game.Players.Select(MapPlayer).ToList()
-        };
-
+        var dto = _gameService.GetGameState(gameId);
+        if (dto == null) return;
         await Clients.Group(gameId).SendAsync("GameStateUpdated", dto);
     }
 
-    private static PlayerDto MapPlayer(Player p) => new()
+    private static string NormalizePlayerName(string? name)
     {
-        ConnectionId = p.ConnectionId,
-        Name = p.Name,
-        Chips = p.Chips,
-        CurrentBet = p.CurrentBet,
-        HandValue = p.HandValue,
-        Status = p.Status.ToString(),
-        Hand = p.Hand.Select(c => new CardDto { Display = c.Display, IsRed = c.IsRed }).ToList()
-    };
+        var trimmed = name?.Trim() ?? "";
+        return trimmed[..Math.Min(trimmed.Length, 20)];
+    }
 }

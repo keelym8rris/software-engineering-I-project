@@ -1,120 +1,284 @@
-﻿@page "/"
+@page "/"
+@page "/play"
+@using BlackjackApp.Models
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.Extensions.Logging
 @inject NavigationManager Nav
+@inject ILogger<Index> Logger
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="lobby">
-    <h1>♠ Blackjack</h1>
+<PageTitle>Blackjack | Home</PageTitle>
 
-    @if (!_connected)
-    {
-        <p class="status">Connecting...</p>
-    }
-    else
-    {
-        <div class="lobby-panel">
-            <input @bind="_playerName" placeholder="Your name" maxlength="20" class="input" />
+@if (!IsPlayPage)
+{
+    <main class="home">
+        <div class="home-content">
+            <p class="home-eyebrow">YOUR TABLE IS READY</p>
+            <h1>Blackjack</h1>
+            <p class="home-intro">Play solo, host a table for friends, or learn the basics before you sit down.</p>
 
-            <div class="lobby-actions">
-                <button class="btn btn-primary" @onclick="CreateGame" disabled="@string.IsNullOrWhiteSpace(_playerName)">
-                    Create New Game
-                </button>
-            </div>
-
-            @if (_openGames.Count > 0)
-            {
-                <h3>Open Games</h3>
-                <ul class="game-list">
-                    @foreach (var g in _openGames)
-                    {
-                        <li>
-                            <span>Game @g.GameId — @g.PlayerCount player(s)</span>
-                            <button class="btn btn-secondary" @onclick="() => JoinGame(g.GameId)"
-                                    disabled="@string.IsNullOrWhiteSpace(_playerName)">
-                                Join
-                            </button>
-                        </li>
-                    }
-                </ul>
-            }
-            else
-            {
-                <p class="muted">No open games. Create one!</p>
-            }
-
-            @if (!string.IsNullOrEmpty(_error))
-            {
-                <p class="error">@_error</p>
-            }
+            <nav class="home-options" aria-label="Blackjack options">
+                <a class="home-option home-option-primary" href="/play">
+                    <span class="home-option-icon" aria-hidden="true">+</span>
+                    <span>
+                        <strong>Play solo or host a table</strong>
+                        <span>Choose a game mode and get started.</span>
+                    </span>
+                    <span class="home-option-arrow" aria-hidden="true">-&gt;</span>
+                </a>
+                <a class="home-option" href="/create">
+                    <span class="home-option-icon" aria-hidden="true">+</span>
+                    <span>
+                        <strong>Create a multiplayer game</strong>
+                        <span>Start a lobby and share its code.</span>
+                    </span>
+                    <span class="home-option-arrow" aria-hidden="true">-&gt;</span>
+                </a>
+                <a class="home-option" href="/join">
+                    <span class="home-option-icon" aria-hidden="true">#</span>
+                    <span>
+                        <strong>Join a game</strong>
+                        <span>Enter a friend's lobby code.</span>
+                    </span>
+                    <span class="home-option-arrow" aria-hidden="true">-&gt;</span>
+                </a>
+                <a class="home-option" href="/instructions">
+                    <span class="home-option-icon" aria-hidden="true">?</span>
+                    <span>
+                        <strong>How to play</strong>
+                        <span>Get familiar with the rules and controls.</span>
+                    </span>
+                    <span class="home-option-arrow" aria-hidden="true">-&gt;</span>
+                </a>
+                <a class="home-option" href="/player-name">
+                    <span class="home-option-icon" aria-hidden="true">P</span>
+                    <span>
+                        <strong>Change player name</strong>
+                        <span>Choose the name shown at the table.</span>
+                    </span>
+                    <span class="home-option-arrow" aria-hidden="true">-&gt;</span>
+                </a>
+            </nav>
         </div>
-    }
-</div>
+    </main>
+}
+else
+{
+    <div class="lobby">
+        <h1>Blackjack</h1>
+
+        @if (!_connected)
+        {
+            <p class="status">@(_error.Length == 0 ? "Connecting..." : "The game server is unavailable.")</p>
+            @if (_error.Length > 0)
+            {
+                <p class="error" role="alert">@_error</p>
+            }
+        }
+        else
+        {
+            <div class="lobby-panel">
+                @if (_selectedMode == null)
+                {
+                    <h2>How would you like to play?</h2>
+                    <div class="mode-options">
+                        <button class="btn btn-primary" @onclick="() => SelectMode(GameMode.Solo)">Solo</button>
+                        <p class="muted">Play against the house dealer on your own.</p>
+                        <button class="btn btn-secondary" @onclick="() => SelectMode(GameMode.Multiplayer)">Multiplayer</button>
+                        <p class="muted">Host a lobby for friends or join one with a code.</p>
+                    </div>
+                }
+                else
+                {
+                    <h2>@_selectedMode</h2>
+                    <label for="player-name">Your name</label>
+                    <input id="player-name" @bind="_playerName" @bind:event="oninput" placeholder="Your name" maxlength="20" class="input" />
+
+                    @if (_selectedMode == GameMode.Solo)
+                    {
+                        <p class="muted">Your own table, with the dealer controlled by the game.</p>
+                        <button class="btn btn-primary" @onclick="CreateGame" disabled="@(_creating || string.IsNullOrWhiteSpace(_playerName))">
+                            @(_creating ? "Creating..." : "Start Solo Game")
+                        </button>
+                    }
+                    else
+                    {
+                        <p class="muted">Create a lobby and share its code with your friends.</p>
+                        <button class="btn btn-primary" @onclick="CreateGame" disabled="@(_creating || string.IsNullOrWhiteSpace(_playerName))">
+                            @(_creating ? "Creating..." : "Host Lobby")
+                        </button>
+                        <form class="join-form" @onsubmit="JoinLobby" @onsubmit:preventDefault>
+                            <label for="lobby-code">Have a lobby code?</label>
+                            <input id="lobby-code" @bind="_lobbyCode" @bind:event="oninput" placeholder="8-character lobby code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" class="input code-input" />
+                            <button type="submit" class="btn btn-secondary" disabled="@(_creating || string.IsNullOrWhiteSpace(_playerName) || string.IsNullOrWhiteSpace(_lobbyCode))">Join Lobby</button>
+                        </form>
+                    }
+
+                    <button class="btn btn-secondary" @onclick="BackToModes" disabled="@_creating">Back</button>
+                }
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <p class="error" role="alert">@_error</p>
+                }
+            </div>
+        }
+    </div>
+}
 
 @code {
+    private const string PlayerNameStorageKey = "blackjack.playerName";
+
     private HubConnection? _hub;
     private string _playerName = "";
     private string _error = "";
-    private bool _connected = false;
-    private List<GameSummary> _openGames = new();
-    private System.Threading.Timer? _refreshTimer;
+    private bool _connected;
+    private GameMode? _selectedMode;
+    private string _lobbyCode = "";
+    private bool _creating;
 
-    record GameSummary(string GameId, int PlayerCount);
+    private bool IsPlayPage => Nav.ToBaseRelativePath(Nav.Uri).TrimEnd('/') == "play";
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += HandleLocationChanged;
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args) =>
+        _ = InvokeAsync(StateHasChanged);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
-
-        _hub = new HubConnectionBuilder()
-            .WithUrl(Nav.ToAbsoluteUri("/blackjackhub"))
-            .WithAutomaticReconnect()
-            .Build();
-
-        _hub.On<string, string>("GameCreated", (id, connId) =>
-            Nav.NavigateTo($"/game/{id}?name={Uri.EscapeDataString(_playerName.Trim())}&connId={connId}"));
-
-        _hub.On<string, string>("GameJoined", (id, connId) =>
-            Nav.NavigateTo($"/game/{id}?name={Uri.EscapeDataString(_playerName.Trim())}&connId={connId}"));
-
-        _hub.On<string>("Error", msg =>
+        if (firstRender)
         {
-            _error = msg;
-            InvokeAsync(StateHasChanged);
-        });
+            _playerName = await JS.InvokeAsync<string?>("localStorage.getItem", PlayerNameStorageKey) ?? "";
+            if (!IsPlayPage)
+            {
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+        }
 
-        _hub.On<List<GameSummary>>("OpenGames", games =>
+        if (!IsPlayPage || _hub != null) return;
+
+        try
         {
-            _openGames = games;
-            InvokeAsync(StateHasChanged);
-        });
+            _hub = new HubConnectionBuilder()
+                .WithUrl(Nav.ToAbsoluteUri("/blackjackhub"))
+                .WithAutomaticReconnect()
+                .Build();
 
-        await _hub.StartAsync();
-        _connected = true;
-        await _hub.SendAsync("GetOpenGames");
-        await InvokeAsync(StateHasChanged);
+            _hub.On<string, string>("GameCreated", NavigateToGame);
+            _hub.On<string>("Error", ShowServerError);
 
-        // Keep the game list fresh every 3 seconds
-        _refreshTimer = new System.Threading.Timer(async _ =>
+            _hub.Reconnecting += _ => InvokeAsync(() =>
+            {
+                _connected = false;
+                _creating = false;
+                _error = "Connection lost. Reconnecting...";
+                StateHasChanged();
+            });
+            _hub.Reconnected += _ => InvokeAsync(() =>
+            {
+                _connected = true;
+                _error = "";
+                StateHasChanged();
+            });
+            _hub.Closed += _ => InvokeAsync(() =>
+            {
+                _connected = false;
+                _creating = false;
+                _error = "The connection closed. Refresh the page to try again.";
+                StateHasChanged();
+            });
+
+            await _hub.StartAsync();
+            _connected = true;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
         {
-            if (_hub?.State == HubConnectionState.Connected)
-                await _hub.SendAsync("GetOpenGames");
-        }, null, 3000, 3000);
+            Logger.LogError(ex, "Could not connect to the blackjack server");
+            _connected = false;
+            _error = "Could not connect to the game server. Refresh the page to try again.";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void SelectMode(GameMode mode)
+    {
+        _selectedMode = mode;
+        _error = "";
+    }
+
+    private void BackToModes()
+    {
+        _selectedMode = null;
+        _error = "";
     }
 
     private async Task CreateGame()
     {
-        if (_hub != null && !string.IsNullOrWhiteSpace(_playerName))
-            await _hub.SendAsync("CreateGame", _playerName.Trim());
+        if (_creating || _selectedMode == null || string.IsNullOrWhiteSpace(_playerName)) return;
+
+        if (_hub?.State != HubConnectionState.Connected)
+        {
+            _error = "The game server is not connected. Refresh the page to try again.";
+            return;
+        }
+
+        _creating = true;
+        _error = "";
+        try
+        {
+            _playerName = _playerName.Trim();
+            await JS.InvokeVoidAsync("localStorage.setItem", PlayerNameStorageKey, _playerName);
+            await _hub.InvokeAsync("CreateGame", _playerName, _selectedMode.Value.ToString());
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not create a game from the play menu");
+            _error = "The game could not be created. Please try again.";
+        }
+        finally
+        {
+            _creating = false;
+        }
     }
 
-    private async Task JoinGame(string gameId)
+    private async Task JoinLobby()
     {
-        if (_hub != null && !string.IsNullOrWhiteSpace(_playerName))
-            await _hub.SendAsync("JoinGame", gameId, _playerName.Trim(), (string?)null);
+        if (_creating || string.IsNullOrWhiteSpace(_playerName)) return;
+
+        var code = _lobbyCode.Trim().ToUpperInvariant();
+        if (code.Length != 8 || !code.All(Uri.IsHexDigit))
+        {
+            _error = "Enter the 8-character code shown in your friend's lobby.";
+            return;
+        }
+
+        _playerName = _playerName.Trim();
+        await JS.InvokeVoidAsync("localStorage.setItem", PlayerNameStorageKey, _playerName);
+        Nav.NavigateTo($"/game/{code}?name={Uri.EscapeDataString(_playerName)}");
     }
+
+    private void NavigateToGame(string gameId, string connectionId) =>
+        _ = InvokeAsync(() => Nav.NavigateTo(
+            $"/game/{gameId}?name={Uri.EscapeDataString(_playerName.Trim())}&connId={Uri.EscapeDataString(connectionId)}"));
+
+    private void ShowServerError(string message) => _ = InvokeAsync(() =>
+    {
+        _error = message;
+        _creating = false;
+        StateHasChanged();
+    });
 
     public async ValueTask DisposeAsync()
     {
-        _refreshTimer?.Dispose();
-        if (_hub != null) await _hub.DisposeAsync();
+        Nav.LocationChanged -= HandleLocationChanged;
+        if (_hub == null) return;
+        try { await _hub.DisposeAsync(); }
+        catch (Exception ex) { Logger.LogDebug(ex, "Error disposing the home screen connection"); }
     }
 }
