@@ -14,9 +14,7 @@
     <h1>@(IsCreatePage ? "Create a game" : "Join a game")</h1>
 
     <section class="lobby-panel" aria-label="@(IsCreatePage ? "Create a game" : "Join a game")">
-        <label for="player-name">Your name</label>
-        <input id="player-name" @bind="_playerName" maxlength="20" autocomplete="nickname" placeholder="Enter your name" class="input" />
-
+        
         @if (IsCreatePage)
         {
             @if (!_connected)
