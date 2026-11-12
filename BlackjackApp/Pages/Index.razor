@@ -8,38 +8,30 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<PageTitle>Blackjack | Home</PageTitle>
+<PageTitle>Casino games | Home</PageTitle>
 
 @if (!IsPlayPage)
 {
     <main class="home">
         <div class="home-content">
-            <p class="home-eyebrow">YOUR TABLE IS READY</p>
-            <h1>Blackjack</h1>
-            <p class="home-intro">Play solo, host a table for friends, or learn the basics before you sit down.</p>
+            <p class="home-eyebrow">PICK YOUR TABLE</p>
+            <h1>Casino Games</h1>
+            <p class="home-intro">Play blackjack with friends or take a spin at the roulette table.</p>
 
-            <nav class="home-options" aria-label="Blackjack options">
+            <nav class="home-options" aria-label="Game options">
                 <a class="home-option home-option-primary" href="/play">
-                    <span class="home-option-icon" aria-hidden="true">+</span>
+                    <span class="home-option-icon" aria-hidden="true">♠</span>
                     <span>
-                        <strong>Play solo or host a table</strong>
-                        <span>Choose a game mode and get started.</span>
+                        <strong>Blackjack</strong>
+                        <span>Play solo, host a table, or join friends.</span>
                     </span>
                     <span class="home-option-arrow" aria-hidden="true">-&gt;</span>
                 </a>
-                <a class="home-option" href="/create">
-                    <span class="home-option-icon" aria-hidden="true">+</span>
+                <a class="home-option" href="/roulette">
+                    <span class="home-option-icon" aria-hidden="true">0</span>
                     <span>
-                        <strong>Create a multiplayer game</strong>
-                        <span>Start a lobby and share its code.</span>
-                    </span>
-                    <span class="home-option-arrow" aria-hidden="true">-&gt;</span>
-                </a>
-                <a class="home-option" href="/join">
-                    <span class="home-option-icon" aria-hidden="true">#</span>
-                    <span>
-                        <strong>Join a game</strong>
-                        <span>Enter a friend's lobby code.</span>
+                        <strong>Roulette</strong>
+                        <span>Place a bet and see where the wheel lands.</span>
                     </span>
                     <span class="home-option-arrow" aria-hidden="true">-&gt;</span>
                 </a>
@@ -66,6 +58,8 @@
 else
 {
     <div class="lobby">
+        <a class="lobby-home-link" href="/">Back to home</a>
+        
         <h1>Blackjack</h1>
 
         @if (!_connected)

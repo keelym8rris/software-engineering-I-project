@@ -159,6 +159,111 @@ body {
 .name-settings-panel label { font-weight: 600; }
 .name-settings-panel .btn { align-self: flex-start; }
 
+.roulette-page {
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 3rem;
+}
+
+.roulette-page > .lobby-home-link { display: inline-block; }
+.roulette-header { margin: 0 auto 1.5rem; text-align: center; }
+.roulette-header .home-eyebrow { margin-top: 0.5rem; }
+.roulette-header h1 { font-size: clamp(2.5rem, 7vw, 4rem); }
+.roulette-intro { margin-top: 0.5rem; color: rgba(255, 255, 255, 0.78); line-height: 1.6; }
+
+.roulette-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    padding: clamp(1.25rem, 4vw, 2rem);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 16px;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.roulette-bankroll { display: grid; gap: 0.15rem; text-align: center; }
+.roulette-bankroll span { color: rgba(255, 255, 255, 0.7); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.14em; }
+.roulette-bankroll strong { color: #f5c518; font-size: 1.8rem; }
+
+.roulette-wheel {
+    display: grid;
+    place-items: center;
+    width: 150px;
+    height: 150px;
+    border: 7px solid #d6b66a;
+    border-radius: 50%;
+    background: radial-gradient(circle, #17522d 57%, #8a682b 58%, #d6b66a 68%, #143b23 69%);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+
+.wheel-number { display: grid; place-items: center; width: 56px; height: 56px; border: 2px solid #fff; border-radius: 50%; font-size: 1.7rem; font-weight: 800; }
+.wheel-number.red { background: #b51f2b; }
+.wheel-number.black { background: #171717; }
+.wheel-number.green { background: #15803d; }
+.wheel-number.wheel-empty, .wheel-number.wheel-spinning { background: #1d6035; }
+.wheel-caption { margin-top: -1rem; padding: 0.1rem 0.4rem; border-radius: 4px; background: #123d23; font-size: 0.72rem; }
+
+.roulette-panel fieldset { width: 100%; border: 0; text-align: center; }
+.roulette-panel legend { width: 100%; margin-bottom: 0.65rem; font-weight: 700; }
+.roulette-bet-types { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+.roulette-type-button, .roulette-outside-button {
+    padding: 0.65rem 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+    color: #fff;
+    cursor: pointer;
+}
+
+.roulette-type-button:hover, .roulette-type-button.selected,
+.roulette-outside-button:hover, .roulette-outside-button.selected {
+    border-color: #f5c518;
+    box-shadow: 0 0 0 1px #f5c518;
+}
+
+.roulette-number-grid {
+    display: grid;
+    grid-template-columns: repeat(13, minmax(0, 1fr));
+    gap: 0.25rem;
+}
+
+.roulette-number {
+    min-width: 0;
+    min-height: 2.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 4px;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.roulette-number.green { grid-row: 1 / 4; background: #15803d; }
+.roulette-number.red, .roulette-outside-button.red { background: #b51f2b; }
+.roulette-number.black, .roulette-outside-button.black { background: #171717; }
+.roulette-number.selected { outline: 3px solid #f5c518; outline-offset: 1px; }
+.roulette-number:hover { filter: brightness(1.25); }
+.roulette-outside-bets { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.65rem; }
+.roulette-outside-button { min-width: 120px; font-weight: 700; }
+
+.roulette-wager { display: grid; gap: 0.5rem; width: 100%; max-width: 320px; text-align: center; }
+.roulette-wager label { font-weight: 600; }
+.roulette-wager input {
+    width: 100%;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 1rem;
+}
+
+.roulette-spin-button { min-width: 190px; }
+.roulette-message { min-height: 1.5rem; text-align: center; line-height: 1.5; }
+.roulette-message.win { color: #b6f2c5; font-weight: 700; }
+.roulette-rules { margin: 1.25rem auto 0; color: rgba(255, 255, 255, 0.7); font-size: 0.9rem; line-height: 1.6; text-align: center; }
+
 .lobby h1 {
     font-size: 3rem;
     margin-bottom: 2rem;
@@ -424,6 +529,8 @@ body {
     .lobby { padding: 2rem 1rem; }
     .lobby h1 { font-size: 2.25rem; }
     .lobby-panel { padding: 1.25rem; }
+    .roulette-number-grid { gap: 0.15rem; }
+    .roulette-number { min-height: 1.85rem; padding: 0; font-size: 0.8rem; }
     .game-table { padding: 1rem 0.75rem; }
     .card { width: 50px; height: 72px; font-size: 1.2rem; }
 }

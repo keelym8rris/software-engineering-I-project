@@ -1,0 +1,222 @@
+@page "/roulette"
+@using System.Security.Cryptography
+
+<PageTitle>Roulette</PageTitle>
+
+<main class="roulette-page">
+    <a class="lobby-home-link" href="/">Back to games</a>
+    <header class="roulette-header">
+        <p class="home-eyebrow">PLACE YOUR BETS</p>
+        <h1>Roulette</h1>
+        <p class="roulette-intro">Choose a bet, set your wager, and spin the wheel. Playing with virtual chips only.</p>
+    </header>
+
+    <section class="roulette-panel" aria-label="Roulette game">
+        <div class="roulette-bankroll">
+            <span>YOUR CHIPS</span>
+            <strong>@_chips.ToString("N0")</strong>
+        </div>
+
+        <div class="roulette-wheel" aria-live="polite" aria-label="@WheelLabel">
+            @if (_spinning)
+            {
+                <span class="wheel-number wheel-spinning">...</span>
+                <span class="wheel-caption">The wheel is spinning</span>
+            }
+            else if (_lastNumber.HasValue)
+            {
+                <span class="wheel-number @NumberColorClass(_lastNumber.Value)">@_lastNumber</span>
+                <span class="wheel-caption">Last spin</span>
+            }
+            else
+            {
+                <span class="wheel-number wheel-empty">?</span>
+                <span class="wheel-caption">Ready to spin</span>
+            }
+        </div>
+
+        <fieldset class="roulette-bet-types" disabled="@_spinning">
+            <legend>Choose your bet type</legend>
+            @foreach (var betType in Enum.GetValues<BetType>())
+            {
+                <button type="button"
+                        class="roulette-type-button @(_betType == betType ? "selected" : "")"
+                        aria-pressed="@(_betType == betType)"
+                        @onclick="() => SelectBetType(betType)">
+                    @BetTypeLabel(betType)
+                </button>
+            }
+        </fieldset>
+
+        @if (_betType == BetType.Number)
+        {
+            <fieldset class="roulette-number-bets" disabled="@_spinning">
+                <legend>Choose a number</legend>
+                <div class="roulette-number-grid">
+                    <button type="button"
+                            class="roulette-number green @(IsNumberSelected(0) ? "selected" : "")"
+                            aria-pressed="@IsNumberSelected(0)"
+                            @onclick="() => SelectNumber(0)">0</button>
+                    @for (var row = 0; row < 3; row++)
+                    {
+                        @for (var column = 0; column < 12; column++)
+                        {
+                            var number = (column * 3) + (3 - row);
+                            <button type="button"
+                                    class="roulette-number @NumberColorClass(number) @(IsNumberSelected(number) ? "selected" : "")"
+                                    aria-pressed="@IsNumberSelected(number)"
+                                    @onclick="() => SelectNumber(number)">@number</button>
+                        }
+                    }
+                </div>
+            </fieldset>
+        }
+        else
+        {
+            <fieldset class="roulette-outside-bets" disabled="@_spinning">
+                <legend>@(_betType == BetType.Color ? "Choose a color" : "Choose odd or even")</legend>
+                @foreach (var option in CurrentBetOptions)
+                {
+                    <button type="button"
+                            class="roulette-outside-button @OptionColorClass(option) @(_selectedValue == option ? "selected" : "")"
+                            aria-pressed="@(_selectedValue == option)"
+                            @onclick="() => _selectedValue = option">
+                        @option
+                    </button>
+                }
+            </fieldset>
+        }
+
+        <div class="roulette-wager">
+            <label for="roulette-wager">Wager (1–@_chips.ToString("N0") chips)</label>
+            <input id="roulette-wager" type="number" min="1" max="@_chips" step="1" @bind="_wager" disabled="@_spinning" />
+        </div>
+
+        <button type="button"
+                class="btn btn-primary roulette-spin-button"
+                @onclick="Spin"
+                disabled="@(_spinning || _wager < 1 || _wager > _chips)">
+            @(_spinning ? "Spinning..." : "Spin the wheel")
+        </button>
+
+        <p class="roulette-message @(_messageIsWin ? "win" : "")" role="status" aria-live="polite">@_message</p>
+
+        @if (_chips == 0 && !_spinning)
+        {
+            <button type="button" class="btn btn-secondary" @onclick="StartOver">Start over with 1,000 chips</button>
+        }
+    </section>
+
+    <p class="roulette-rules">
+        Straight-up number bets pay 35:1. Red/black and odd/even bets pay 1:1.
+        Zero is green and does not count as red, black, odd, or even.
+    </p>
+</main>
+
+@code {
+    private static readonly HashSet<int> RedNumbers =
+    [
+        1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
+    ];
+
+    private int _chips = 1_000;
+    private int _wager = 10;
+    private int? _lastNumber;
+    private BetType _betType = BetType.Number;
+    private string _selectedValue = "17";
+    private bool _spinning;
+    private bool _messageIsWin;
+    private string _message = "Select a bet and spin to get started.";
+
+    private string WheelLabel => _lastNumber.HasValue
+        ? $"Last result: {_lastNumber.Value}, {NumberColorLabel(_lastNumber.Value)}"
+        : "Roulette wheel";
+
+    private IEnumerable<string> CurrentBetOptions => _betType == BetType.Color
+        ? ["Red", "Black"]
+        : ["Odd", "Even"];
+
+    private void SelectBetType(BetType betType)
+    {
+        _betType = betType;
+        _selectedValue = betType == BetType.Number ? "17" : CurrentBetOptions.First();
+    }
+
+    private void SelectNumber(int number) => _selectedValue = number.ToString();
+
+    private bool IsNumberSelected(int number) => _selectedValue == number.ToString();
+
+    private async Task Spin()
+    {
+        if (_spinning || _wager < 1 || _wager > _chips) return;
+
+        _spinning = true;
+        _chips -= _wager;
+        _message = "Good luck!";
+        _messageIsWin = false;
+
+        try
+        {
+            await Task.Delay(900);
+            var result = RandomNumberGenerator.GetInt32(37);
+            _lastNumber = result;
+
+            var wins = _betType switch
+            {
+                BetType.Number => result.ToString() == _selectedValue,
+                BetType.Color => result != 0 && NumberColorLabel(result) == _selectedValue,
+                BetType.Parity => result != 0 && (result % 2 == 0 ? "Even" : "Odd") == _selectedValue,
+                _ => false
+            };
+
+            if (wins)
+            {
+                var profit = _betType == BetType.Number ? _wager * 35 : _wager;
+                _chips += _wager + profit;
+                _message = $"You won {profit:N0} chips! Your bet and winnings total {(_wager + profit):N0} chips.";
+                _messageIsWin = true;
+            }
+            else
+            {
+                _message = $"No win this time. You lost {_wager:N0} chips.";
+            }
+        }
+        finally
+        {
+            _spinning = false;
+        }
+    }
+
+    private void StartOver()
+    {
+        _chips = 1_000;
+        _wager = 10;
+        _lastNumber = null;
+        _message = "Select a bet and spin to get started.";
+        _messageIsWin = false;
+    }
+
+    private static string BetTypeLabel(BetType betType) => betType switch
+    {
+        BetType.Number => "Straight-up number",
+        BetType.Color => "Red or black",
+        BetType.Parity => "Odd or even",
+        _ => betType.ToString()
+    };
+
+    private static string NumberColorClass(int number) =>
+        number == 0 ? "green" : RedNumbers.Contains(number) ? "red" : "black";
+
+    private static string NumberColorLabel(int number) =>
+        number == 0 ? "Green" : RedNumbers.Contains(number) ? "Red" : "Black";
+
+    private string OptionColorClass(string option) =>
+        option == "Red" ? "red" : option == "Black" ? "black" : "";
+
+    private enum BetType
+    {
+        Number,
+        Color,
+        Parity
+    }
+}

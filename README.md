@@ -1,6 +1,6 @@
 # Multiplayer Blackjack
 
-A real-time multiplayer Blackjack game built with Blazor Server and SignalR.
+A casino games app with real-time multiplayer Blackjack and solo Roulette, built with Blazor Server.
 
 ## Requirements
 
@@ -22,7 +22,7 @@ Then open `http://localhost:5400` in your browser.
 
 To test multiplayer, open the same URL in a second browser tab or window.
 
-## How to play
+## Blackjack
 
 1. Enter your name and click **Create New Game**
 2. Share the game ID with other players — they enter their name and click **Join** on the lobby screen
@@ -32,6 +32,10 @@ To test multiplayer, open the same URL in a second browser tab or window.
 6. On your turn, click **Hit** to draw a card or **Stand** to hold
 7. After all players act, the dealer draws to 17
 8. Winnings are settled automatically — blackjack pays 1.5x
+
+## Roulette
+
+Choose **Roulette** from the home page to play with 1,000 virtual chips. Bet on a single number, red or black, or odd or even, then spin the wheel. Straight-up bets pay 35:1 and red/black or odd/even bets pay 1:1. Chips are not real currency.
 
 ## Project structure
 
@@ -48,8 +52,9 @@ BlackjackApp/
 ├── Services/
 │   └── GameService.cs        # Game logic (singleton)
 ├── Pages/
-│   ├── Index.razor            # Lobby
-│   └── Game.razor             # Game table
+│   ├── Index.razor            # Home and Blackjack lobby
+│   ├── Game.razor             # Blackjack game table
+│   └── Roulette.razor         # Solo Roulette
 └── Program.cs
 ```
 
