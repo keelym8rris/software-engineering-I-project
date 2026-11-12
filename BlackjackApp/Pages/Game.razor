@@ -1,5 +1,6 @@
 @page "/game/{GameId}"
 @using BlackjackApp.Models
+@using BlackjackApp.Services
 @using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.Extensions.Logging
 @inject NavigationManager Nav
@@ -79,7 +80,7 @@
                         @if (isMe) { <span class="you-badge">You</span> }
                         @if (player.ConnectionId == _game.HostConnectionId) { <span class="host-badge">Host</span> }
                     </div>
-                    <div class="player-chips">$ @player.Chips</div>
+                    <div class="player-chips">@player.Chips.ToString("N1") chips</div>
                     <div class="player-bet">Bet: @player.CurrentBet</div>
                     <div class="hand">
                         @foreach (var card in player.Hand)
@@ -98,7 +99,17 @@
 
         <!-- Actions -->
         <div class="actions">
-            @if (_game.Phase == "Lobby")
+            @if (Me == null || (Me.Chips < GameService.MinimumBet && (_game.Phase == "RoundOver" || _game.Phase == "Betting")))
+            {
+                <section class="balance-notice" aria-labelledby="balance-heading" role="status">
+                    <h2 id="balance-heading">Ready for a fresh table?</h2>
+                    <p>@(Me == null ? "Your seat has closed." : $"Your balance of {Me.Chips:N1} chips is below the {GameService.MinimumBet}-chip minimum bet.")</p>
+                    <p>Each new table starts you with 1,000 virtual chips. Balances stay with this session.</p>
+                    <button class="btn btn-primary" @onclick="StartFreshTable">Start a fresh table</button>
+                    <button class="btn btn-secondary" @onclick="LeaveGame">Back to games</button>
+                </section>
+            }
+            else if (_game.Phase == "Lobby")
             {
                 @if (_game.HostConnectionId == _myConnectionId)
                 {
@@ -120,14 +131,14 @@
                 @if (me != null && me.CurrentBet == 0)
                 {
                     <div class="bet-controls">
-                        <label>Bet amount:</label>
-                        <input type="number" @bind="_betAmount" @bind:event="oninput" min="10" max="@me.Chips" step="10" class="input" />
-                        <button class="btn btn-primary" @onclick="PlaceBet" disabled="@(_betAmount < 10 || _betAmount > me.Chips)">Place Bet</button>
+                        <label for="bet-amount">Bet amount (chips):</label>
+                        <input id="bet-amount" type="number" @bind="_betAmount" @bind:event="oninput" min="@GameService.MinimumBet" max="@decimal.Floor(me.Chips)" step="1" class="input" />
+                        <button class="btn btn-primary" @onclick="PlaceBet" disabled="@(_betAmount < GameService.MinimumBet || _betAmount > me.Chips)">Place Bet</button>
                     </div>
                     <div class="quick-bets">
                         @foreach (var amt in new[] { 10, 25, 50, 100 })
                         {
-                            <button class="btn btn-chip" @onclick="() => QuickBet(amt)">@amt</button>
+                            <button class="btn btn-chip" @onclick="() => QuickBet(amt)" disabled="@(amt > me.Chips)">@amt</button>
                         }
                     </div>
                 }
@@ -169,6 +180,7 @@
     private string _connectionStatus = "";
     private bool _joining;
     private int _betAmount = 10;
+    private PlayerDto? Me => _game?.Players.FirstOrDefault(p => p.ConnectionId == _myConnectionId);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -252,6 +264,7 @@
     private async Task Stand() => await SendHubRequestAsync("Stand", GameId);
     private async Task NewRound() => await SendHubRequestAsync("NewRound", GameId);
     private void LeaveGame() => Nav.NavigateTo("/");
+    private void StartFreshTable() => Nav.NavigateTo("/play");
 
     private void UpdateGameState(GameStateDto state) => _ = InvokeAsync(() =>
     {

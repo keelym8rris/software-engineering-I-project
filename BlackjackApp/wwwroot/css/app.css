@@ -453,6 +453,18 @@ body {
 }
 
 .player-chips { font-size: 0.85rem; opacity: 0.8; }
+
+.balance-notice {
+    max-width: 460px;
+    padding: 1.5rem;
+    border: 1px solid #d6b66a;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    text-align: center;
+}
+.balance-notice h2 { margin-bottom: 0.75rem; font-size: 1.3rem; color: #f5c518; }
+.balance-notice p { margin-bottom: 1rem; line-height: 1.5; }
+.balance-notice .btn { margin: 0.25rem; }
 .player-bet { font-size: 0.85rem; opacity: 0.7; margin-bottom: 0.3rem; }
 .hand-value { font-size: 0.85rem; margin-top: 0.3rem; }
 
