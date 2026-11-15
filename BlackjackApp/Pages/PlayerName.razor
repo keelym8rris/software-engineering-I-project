@@ -1,0 +1,61 @@
+@page "/player-name"
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>Blackjack | Change player name</PageTitle>
+
+<main class="name-settings">
+    <a class="lobby-home-link" href="/">← Back to home</a>
+    <p class="home-eyebrow">PLAYER SETTINGS</p>
+    <h1>Change player name</h1>
+    <p class="name-settings-intro">Choose the name other players will see at the table.</p>
+
+    @if (!_loaded)
+    {
+        <p class="status">Loading player name...</p>
+    }
+    else
+    {
+        <form class="name-settings-panel" @onsubmit="SaveName" @onsubmit:preventDefault>
+            <label for="player-name">Player name</label>
+            <input id="player-name" class="input" @bind="_playerName" maxlength="20"
+                   autocomplete="nickname" placeholder="Enter your name" />
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <p class="error" role="alert">@_error</p>
+            }
+            <button class="btn btn-primary" type="submit" disabled="@string.IsNullOrWhiteSpace(_playerName)">
+                Save name
+            </button>
+        </form>
+    }
+</main>
+
+@code {
+    private const string PlayerNameStorageKey = "blackjack.playerName";
+    private string _playerName = "";
+    private string _error = "";
+    private bool _loaded;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _playerName = await JS.InvokeAsync<string?>("localStorage.getItem", PlayerNameStorageKey) ?? "";
+        _loaded = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SaveName()
+    {
+        var name = _playerName.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            _error = "Enter a name before saving.";
+            return;
+        }
+
+        await JS.InvokeVoidAsync("localStorage.setItem", PlayerNameStorageKey, name);
+        Nav.NavigateTo("/");
+    }
+}

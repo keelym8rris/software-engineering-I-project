@@ -1,40 +1,71 @@
 @page "/game/{GameId}"
 @using BlackjackApp.Models
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.Extensions.Logging
 @inject NavigationManager Nav
+@inject ILogger<Game> Logger
 @implements IAsyncDisposable
 
 <div class="game-table">
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <p class="error" role="alert">@_error</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(_connectionStatus))
+    {
+        <p class="status" role="status">@_connectionStatus</p>
+    }
+
     @if (_game == null)
     {
-        <p class="status">Connecting to game...</p>
+        @if (string.IsNullOrWhiteSpace(_error))
+        {
+            <p class="status">Connecting to game...</p>
+        }
+        else
+        {
+            <button class="btn btn-secondary" @onclick="LeaveGame">Back to game selection</button>
+        }
     }
     else
     {
         <div class="game-header">
-            <span class="game-id">Game: @GameId</span>
+            <span class="game-id">@_game.Mode Blackjack</span>
             <span class="phase-badge">@_game.Phase</span>
             <span class="message">@_game.Message</span>
         </div>
 
+        @if (_game.Phase == "Lobby" && _game.Mode == "Multiplayer")
+        {
+            <section class="room-info" aria-labelledby="lobby-code-heading">
+                <h2 id="lobby-code-heading">Lobby code</h2>
+                <code class="lobby-code">@_game.GameId</code>
+                <p>Share this code with your friends. Choose Multiplayer and enter the code to join.</p>
+                <p class="muted">@_game.Players.Count / 6 players</p>
+            </section>
+        }
+
         <!-- Dealer -->
-        <div class="dealer-area">
-            <h3>Dealer @(_game.Phase == "Playing" ? "" : $"— {_game.Dealer.HandValue}")</h3>
-            <div class="hand">
-                @for (int i = 0; i < _game.Dealer.Hand.Count; i++)
-                {
-                    var card = _game.Dealer.Hand[i];
-                    @if (i == 1 && _game.Phase == "Playing")
+        @if (_game.Phase != "Lobby")
+        {
+            <div class="dealer-area">
+                <h3>Dealer @(_game.Phase == "Playing" ? "" : $"— {_game.Dealer.HandValue}")</h3>
+                <div class="hand">
+                    @for (int i = 0; i < _game.Dealer.Hand.Count; i++)
                     {
-                        <div class="card card-back">🂠</div>
+                        var card = _game.Dealer.Hand[i];
+                        @if (card.IsHidden)
+                        {
+                            <div class="card card-back"></div>
+                        }
+                        else
+                        {
+                            <div class="card @(card.IsRed ? "red" : "black")">@card.Display</div>
+                        }
                     }
-                    else
-                    {
-                        <div class="card @(card.IsRed ? "red" : "black")">@card.Display</div>
-                    }
-                }
+                </div>
             </div>
-        </div>
+        }
 
         <!-- Players -->
         <div class="players-area">
@@ -46,6 +77,7 @@
                     <div class="player-name">
                         @player.Name
                         @if (isMe) { <span class="you-badge">You</span> }
+                        @if (player.ConnectionId == _game.HostConnectionId) { <span class="host-badge">Host</span> }
                     </div>
                     <div class="player-chips">$ @player.Chips</div>
                     <div class="player-bet">Bet: @player.CurrentBet</div>
@@ -66,9 +98,21 @@
 
         <!-- Actions -->
         <div class="actions">
-            @if (_game.Phase == "Lobby" && _game.Players.Count > 0)
+            @if (_game.Phase == "Lobby")
             {
-                <button class="btn btn-primary" @onclick="StartBetting">Start Game</button>
+                @if (_game.HostConnectionId == _myConnectionId)
+                {
+                    <button class="btn btn-primary" @onclick="StartBetting" disabled="@(_game.Mode == "Multiplayer" && _game.Players.Count < 2)">Start Game</button>
+                    @if (_game.Mode == "Multiplayer" && _game.Players.Count < 2)
+                    {
+                        <p class="muted">Waiting for a friend to join with your code. Multiplayer needs at least two players.</p>
+                    }
+                }
+                else
+                {
+                    <p class="muted">Waiting for the host to start the game.</p>
+                }
+                <button class="btn btn-secondary" @onclick="LeaveGame">Leave Lobby</button>
             }
             else if (_game.Phase == "Betting")
             {
@@ -77,8 +121,8 @@
                 {
                     <div class="bet-controls">
                         <label>Bet amount:</label>
-                        <input type="number" @bind="_betAmount" min="10" max="@me.Chips" step="10" class="input" />
-                        <button class="btn btn-primary" @onclick="PlaceBet" disabled="@(_betAmount < 10)">Place Bet</button>
+                        <input type="number" @bind="_betAmount" @bind:event="oninput" min="10" max="@me.Chips" step="10" class="input" />
+                        <button class="btn btn-primary" @onclick="PlaceBet" disabled="@(_betAmount < 10 || _betAmount > me.Chips)">Place Bet</button>
                     </div>
                     <div class="quick-bets">
                         @foreach (var amt in new[] { 10, 25, 50, 100 })
@@ -121,52 +165,126 @@
     private HubConnection? _hub;
     private GameStateDto? _game;
     private string _myConnectionId = "";
+    private string _error = "";
+    private string _connectionStatus = "";
+    private bool _joining;
     private int _betAmount = 10;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
 
-        _hub = new HubConnectionBuilder()
-            .WithUrl(Nav.ToAbsoluteUri("/blackjackhub"))
-            .WithAutomaticReconnect()
-            .Build();
+        GameId = GameId.Trim().ToUpperInvariant();
 
-        _hub.On<GameStateDto>("GameStateUpdated", state =>
+        try
         {
-            _game = state;
-            InvokeAsync(StateHasChanged);
-        });
+            _hub = new HubConnectionBuilder()
+                .WithUrl(Nav.ToAbsoluteUri("/blackjackhub"))
+                .WithAutomaticReconnect()
+                .Build();
 
-        _hub.On<string, string>("GameJoined", (_, connId) =>
+            _hub.On<GameStateDto>("GameStateUpdated", UpdateGameState);
+            _hub.On<string, string>("GameJoined", UpdateConnectionId);
+            _hub.On<string>("Error", ShowServerError);
+
+            _hub.Reconnecting += _ => InvokeAsync(() =>
+            {
+                _connectionStatus = "Connection lost. Reconnecting...";
+                StateHasChanged();
+            });
+            _hub.Reconnected += async _ =>
+            {
+                await InvokeAsync(() =>
+                {
+                    _joining = true;
+                    _connectionStatus = "Restoring your seat...";
+                    StateHasChanged();
+                });
+                await SendHubRequestAsync("JoinGame", GameId, GetPlayerName(), _myConnectionId);
+            };
+            _hub.Closed += _ => InvokeAsync(() =>
+            {
+                _connectionStatus = "The connection closed. Return to the home page and rejoin the game.";
+                StateHasChanged();
+            });
+
+            await _hub.StartAsync();
+            _myConnectionId = _hub.ConnectionId ?? "";
+            _joining = true;
+            await SendHubRequestAsync("JoinGame", GameId, GetPlayerName(), PriorConnectionId);
+        }
+        catch (Exception ex)
         {
-            _myConnectionId = connId;
-            InvokeAsync(StateHasChanged);
-        });
-
-        _hub.On<string>("Error", msg =>
-        {
-            Console.WriteLine($"Hub error: {msg}");
-        });
-
-        await _hub.StartAsync();
-        _myConnectionId = _hub.ConnectionId ?? "";
-
-        var name = string.IsNullOrWhiteSpace(PlayerName) ? "Player" : PlayerName;
-        await _hub.SendAsync("JoinGame", GameId, name, PriorConnectionId);
-        await InvokeAsync(StateHasChanged);
+            Logger.LogError(ex, "Could not connect to game {GameId}", GameId);
+            _error = "Could not connect to this game. Return home and try joining again.";
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
-    private async Task StartBetting() => await _hub!.SendAsync("StartBetting", GameId);
-    private async Task PlaceBet() => await _hub!.SendAsync("PlaceBet", GameId, _betAmount);
+    private string GetPlayerName() => string.IsNullOrWhiteSpace(PlayerName) ? "Player" : PlayerName.Trim();
+
+    private async Task SendHubRequestAsync(string method, params object?[] args)
+    {
+        if (_hub?.State != HubConnectionState.Connected)
+        {
+            _error = "The game server is not connected. Please wait for it to reconnect.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        try
+        {
+            await _hub.SendCoreAsync(method, args);
+            _error = "";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not send {HubMethod} for game {GameId}", method, GameId);
+            _error = "That request could not reach the game server. Please try again.";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task StartBetting() => await SendHubRequestAsync("StartBetting", GameId);
+    private async Task PlaceBet() => await SendHubRequestAsync("PlaceBet", GameId, _betAmount);
     private void QuickBet(int amount) => _betAmount = amount;
-    private async Task Hit() => await _hub!.SendAsync("Hit", GameId);
-    private async Task Stand() => await _hub!.SendAsync("Stand", GameId);
-    private async Task NewRound() => await _hub!.SendAsync("NewRound", GameId);
+    private async Task Hit() => await SendHubRequestAsync("Hit", GameId);
+    private async Task Stand() => await SendHubRequestAsync("Stand", GameId);
+    private async Task NewRound() => await SendHubRequestAsync("NewRound", GameId);
     private void LeaveGame() => Nav.NavigateTo("/");
+
+    private void UpdateGameState(GameStateDto state) => _ = InvokeAsync(() =>
+    {
+        _game = state;
+        StateHasChanged();
+    });
+
+    private void UpdateConnectionId(string ignoredGameId, string connectionId) => _ = InvokeAsync(() =>
+    {
+        _myConnectionId = connectionId;
+        _joining = false;
+        _connectionStatus = "";
+        _error = "";
+        StateHasChanged();
+    });
+
+    private void ShowServerError(string message) => _ = InvokeAsync(() =>
+    {
+        if (_joining)
+        {
+            _joining = false;
+            _game = null;
+            _connectionStatus = "";
+        }
+
+        _error = message;
+        StateHasChanged();
+    });
 
     public async ValueTask DisposeAsync()
     {
-        if (_hub != null) await _hub.DisposeAsync();
+        if (_hub == null) return;
+        try { await _hub.DisposeAsync(); }
+        catch (Exception ex) { Logger.LogDebug(ex, "Error disposing the connection for game {GameId}", GameId); }
     }
 }

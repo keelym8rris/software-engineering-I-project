@@ -4,129 +4,344 @@ namespace BlackjackApp.Services;
 
 public class GameService
 {
+    private readonly object _sync = new();
     private readonly Dictionary<string, GameState> _games = new();
     private readonly Dictionary<string, Deck> _decks = new();
     // Maps connectionId -> gameId for fast disconnect lookup
     private readonly Dictionary<string, string> _connectionIndex = new();
 
-    public GameState CreateGame()
+    public string CreateGame(string hostConnectionId, string hostName, GameMode mode)
     {
-        var game = new GameState();
-        _games[game.GameId] = game;
-        _decks[game.GameId] = new Deck();
-        return game;
+        if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
+
+        lock (_sync)
+        {
+            var game = new GameState { HostConnectionId = hostConnectionId, Mode = mode };
+            while (_games.ContainsKey(game.GameId))
+                game.GameId = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+
+            game.Players.Add(new Player { ConnectionId = hostConnectionId, Name = hostName });
+            _games.Add(game.GameId, game);
+            try
+            {
+                _decks.Add(game.GameId, new Deck(deckCount: 6));
+            }
+            catch
+            {
+                _games.Remove(game.GameId);
+                throw;
+            }
+
+            // The lobby connection is intentionally not indexed. It closes when the
+            // host navigates into the game; JoinGame registers the new connection.
+            return game.GameId;
+        }
     }
 
-    public GameState? GetGame(string gameId) =>
-        _games.TryGetValue(gameId, out var g) ? g : null;
-
-    public string? FindGameForConnection(string connectionId) =>
-        _connectionIndex.TryGetValue(connectionId, out var id) ? id : null;
-
-    public List<GameState> GetOpenGames() =>
-        _games.Values.Where(g => g.Phase == GamePhase.Lobby && g.Players.Count < 6).ToList();
-
-    public bool AddPlayer(string gameId, string connectionId, string name)
+    public void DeleteGame(string gameId)
     {
-        var game = GetGame(gameId);
-        if (game == null || game.Players.Count >= 6 || game.Phase != GamePhase.Lobby) return false;
-        if (game.Players.Any(p => p.ConnectionId == connectionId)) return false;
-
-        game.Players.Add(new Player { ConnectionId = connectionId, Name = name });
-        _connectionIndex[connectionId] = gameId;
-        return true;
-    }
-
-    // Used by CreateGame — skips registering the lobby connection in the index
-    // so that the inevitable lobby disconnect doesn't remove the player
-    public bool AddPlayerNoIndex(string gameId, string connectionId, string name)
-    {
-        var game = GetGame(gameId);
-        if (game == null || game.Players.Count >= 6 || game.Phase != GamePhase.Lobby) return false;
-        if (game.Players.Any(p => p.ConnectionId == connectionId)) return false;
-
-        game.Players.Add(new Player { ConnectionId = connectionId, Name = name });
-        // intentionally NOT adding to _connectionIndex
-        return true;
-    }
-
-    // Called when a player navigates from lobby -> game page (updates their connection ID)
-    public void UpdateConnectionId(string gameId, string oldConnectionId, string newConnectionId)
-    {
-        var game = GetGame(gameId);
-        var player = game?.Players.FirstOrDefault(p => p.ConnectionId == oldConnectionId);
-        if (player == null) return;
-
-        player.ConnectionId = newConnectionId;
-        _connectionIndex.Remove(oldConnectionId);
-        _connectionIndex[newConnectionId] = gameId;
-    }
-
-    public void RemovePlayer(string gameId, string connectionId)
-    {
-        var game = GetGame(gameId);
-        if (game == null) return;
-
-        var player = game.Players.FirstOrDefault(p => p.ConnectionId == connectionId);
-        if (player == null) return;
-
-        int removedIndex = game.Players.IndexOf(player);
-        bool wasCurrentPlayer = game.Phase == GamePhase.Playing &&
-                                game.CurrentPlayer?.ConnectionId == connectionId;
-
-        game.Players.Remove(player);
-        _connectionIndex.Remove(connectionId);
-
-        if (game.Players.Count == 0)
+        lock (_sync)
         {
             _games.Remove(gameId);
             _decks.Remove(gameId);
-            return;
+            foreach (var connectionId in _connectionIndex
+                         .Where(entry => entry.Value == gameId)
+                         .Select(entry => entry.Key)
+                         .ToList())
+                _connectionIndex.Remove(connectionId);
         }
+    }
 
-        if (game.Phase == GamePhase.Playing)
+    public bool TryJoinGame(string gameId, string connectionId, string name, string? priorConnectionId, out string error)
+    {
+        lock (_sync)
         {
-            if (removedIndex < game.CurrentPlayerIndex)
-                game.CurrentPlayerIndex--;
+            error = "";
+            if (!_games.TryGetValue(gameId, out var game))
+            {
+                error = "No lobby found with that code. Check it and try again.";
+                return false;
+            }
 
-            if (wasCurrentPlayer)
-                AdvanceIfNeeded(game);
+            var returningPlayer = priorConnectionId == null
+                ? null
+                : game.Players.FirstOrDefault(p => p.ConnectionId == priorConnectionId);
+
+            if (returningPlayer != null)
+            {
+                _connectionIndex.Remove(returningPlayer.ConnectionId);
+                returningPlayer.ConnectionId = connectionId;
+                _connectionIndex[connectionId] = gameId;
+                if (game.HostConnectionId == priorConnectionId)
+                    game.HostConnectionId = connectionId;
+                return true;
+            }
+
+            if (game.Players.Any(p => p.ConnectionId == connectionId))
+                return true;
+
+            if (game.Mode == GameMode.Solo)
+            {
+                error = "This table is for solo play. Start your own solo game from the play menu.";
+                return false;
+            }
+
+            if (game.Phase != GamePhase.Lobby || game.Players.Count >= 6)
+            {
+                error = "Cannot join this game. It may be full or already started.";
+                return false;
+            }
+
+            game.Players.Add(new Player { ConnectionId = connectionId, Name = name });
+            _connectionIndex[connectionId] = gameId;
+            return true;
         }
-
-        // If betting and the leaver hadn't bet yet, check if remaining players have all bet
-        if (game.Phase == GamePhase.Betting && game.Players.All(p => p.CurrentBet > 0))
-            DealInitialCards(game);
     }
 
-    public bool StartBetting(string gameId)
+    public GameStateDto? GetGameState(string gameId)
     {
-        var game = GetGame(gameId);
-        if (game == null || game.Players.Count == 0) return false;
-        game.Phase = GamePhase.Betting;
-        game.Message = "Place your bets!";
-        foreach (var p in game.Players) { p.CurrentBet = 0; p.Hand.Clear(); p.Status = PlayerStatus.Waiting; }
-        game.Dealer.Hand.Clear();
-        return true;
+        lock (_sync)
+        {
+            if (!_games.TryGetValue(gameId, out var game)) return null;
+
+            return new GameStateDto
+            {
+                GameId = game.GameId,
+                HostConnectionId = game.HostConnectionId,
+                Mode = game.Mode.ToString(),
+                Phase = game.Phase.ToString(),
+                Message = game.Message,
+                CurrentPlayerConnectionId = game.CurrentPlayer?.ConnectionId,
+                Dealer = MapPlayer(game.Dealer, game.Phase == GamePhase.Playing),
+                Players = game.Players.Select(player => MapPlayer(player)).ToList()
+            };
+        }
     }
 
-    public bool PlaceBet(string gameId, string connectionId, int amount)
+    public string? FindGameForConnection(string connectionId)
     {
-        var game = GetGame(gameId);
-        var player = game?.Players.FirstOrDefault(p => p.ConnectionId == connectionId);
-        if (player == null || game!.Phase != GamePhase.Betting) return false;
-        if (amount < 10 || amount > player.Chips) return false;
-
-        player.CurrentBet = amount;
-
-        if (game.AllBetsPlaced)
-            DealInitialCards(game);
-
-        return true;
+        lock (_sync)
+            return _connectionIndex.TryGetValue(connectionId, out var id) ? id : null;
     }
+
+    public bool RemovePlayer(string gameId, string connectionId)
+    {
+        lock (_sync)
+        {
+            if (!_games.TryGetValue(gameId, out var game)) return false;
+
+            var player = game.Players.FirstOrDefault(p => p.ConnectionId == connectionId);
+            if (player == null) return false;
+
+            int removedIndex = game.Players.IndexOf(player);
+            bool wasCurrentPlayer = game.Phase == GamePhase.Playing &&
+                                    game.CurrentPlayer?.ConnectionId == connectionId;
+            bool wasHost = game.HostConnectionId == connectionId;
+
+            game.Players.Remove(player);
+            _connectionIndex.Remove(connectionId);
+
+            if (game.Players.Count == 0)
+            {
+                _games.Remove(gameId);
+                _decks.Remove(gameId);
+                return true;
+            }
+
+            if (wasHost)
+            {
+                game.HostConnectionId = game.Players[0].ConnectionId;
+                if (game.Phase == GamePhase.Lobby)
+                    game.Message = $"{game.Players[0].Name} is now the host.";
+            }
+
+            if (game.Phase == GamePhase.Playing)
+            {
+                if (removedIndex < game.CurrentPlayerIndex)
+                    game.CurrentPlayerIndex--;
+
+                if (wasCurrentPlayer)
+                    AdvanceIfNeeded(game);
+            }
+
+            if (game.Phase == GamePhase.Betting && game.Players.All(p => p.CurrentBet > 0))
+                DealInitialCards(game);
+
+            return true;
+        }
+    }
+
+    public bool StartBetting(string gameId, string connectionId, out string error)
+    {
+        lock (_sync)
+        {
+            error = "";
+            if (!_games.TryGetValue(gameId, out var game))
+                error = "Game not found.";
+            else if (game.HostConnectionId != connectionId)
+                error = "Only the host can start the game.";
+            else if (game.Phase != GamePhase.Lobby)
+                error = "This game has already started.";
+            else if (game.Players.Count < 1)
+                error = "At least one player is required to start.";
+            else if (game.Mode == GameMode.Multiplayer && game.Players.Count < 2)
+                error = "At least two players are required for multiplayer. Share your lobby code with a friend.";
+
+            if (!string.IsNullOrEmpty(error)) return false;
+
+            game!.Phase = GamePhase.Betting;
+            game.Message = "Place your bets!";
+            foreach (var p in game.Players)
+            {
+                p.CurrentBet = 0;
+                p.Hand.Clear();
+                p.Status = PlayerStatus.Waiting;
+            }
+            game.Dealer.Hand.Clear();
+            return true;
+        }
+    }
+
+    public bool PlaceBet(string gameId, string connectionId, int amount, out string error)
+    {
+        lock (_sync)
+        {
+            var game = GetGameUnsafe(gameId);
+            var player = game?.Players.FirstOrDefault(p => p.ConnectionId == connectionId);
+            if (player == null)
+            {
+                error = "You are not a player in this game.";
+                return false;
+            }
+
+            if (game!.Phase != GamePhase.Betting)
+            {
+                error = "Betting is not open right now.";
+                return false;
+            }
+
+            if (player.CurrentBet > 0)
+            {
+                error = "You have already placed a bet for this round.";
+                return false;
+            }
+
+            if (amount < 10)
+            {
+                error = "The minimum bet is $10.";
+                return false;
+            }
+
+            if (amount > player.Chips)
+            {
+                error = "Your bet cannot be greater than your available balance.";
+                return false;
+            }
+
+            player.CurrentBet = amount;
+
+            if (game.AllBetsPlaced)
+                DealInitialCards(game);
+
+            error = "";
+            return true;
+        }
+    }
+
+    public bool Hit(string gameId, string connectionId)
+    {
+        lock (_sync)
+        {
+            var game = GetGameUnsafe(gameId);
+            var player = game?.CurrentPlayer;
+            if (player == null || player.ConnectionId != connectionId || player.Status != PlayerStatus.Playing) return false;
+
+            player.Hand.Add(_decks[gameId].Deal());
+            if (player.IsBusted)
+            {
+                player.Status = PlayerStatus.Busted;
+                AdvancePlayer(game!);
+            }
+            else if (player.HandValue == 21)
+            {
+                player.Status = PlayerStatus.Standing;
+                AdvancePlayer(game!);
+            }
+            return true;
+        }
+    }
+
+    public bool Stand(string gameId, string connectionId)
+    {
+        lock (_sync)
+        {
+            var game = GetGameUnsafe(gameId);
+            var player = game?.CurrentPlayer;
+            if (player == null || player.ConnectionId != connectionId || player.Status != PlayerStatus.Playing) return false;
+
+            player.Status = PlayerStatus.Standing;
+            AdvancePlayer(game!);
+            return true;
+        }
+    }
+
+    public bool ResetRound(string gameId)
+    {
+        lock (_sync)
+        {
+            var game = GetGameUnsafe(gameId);
+            if (game == null || game.Phase != GamePhase.RoundOver) return false;
+
+            var eliminated = game.Players.Where(p => p.Chips <= 0).ToList();
+            foreach (var player in eliminated)
+            {
+                game.Players.Remove(player);
+                _connectionIndex.Remove(player.ConnectionId);
+            }
+
+            if (game.Players.Count == 0)
+            {
+                _games.Remove(gameId);
+                _decks.Remove(gameId);
+                return true;
+            }
+
+            if (!game.Players.Any(p => p.ConnectionId == game.HostConnectionId))
+                game.HostConnectionId = game.Players[0].ConnectionId;
+
+            game.Phase = GamePhase.Lobby;
+            game.Message = "Waiting for players...";
+            return true;
+        }
+    }
+
+    private GameState? GetGameUnsafe(string gameId) =>
+        _games.TryGetValue(gameId, out var game) ? game : null;
+
+    private static PlayerDto MapPlayer(Player player, bool hideHoleCard = false) => new()
+    {
+        ConnectionId = player.ConnectionId,
+        Name = player.Name,
+        Chips = player.Chips,
+        CurrentBet = player.CurrentBet,
+        HandValue = hideHoleCard ? 0 : player.HandValue,
+        Status = player.Status.ToString(),
+        Hand = player.Hand.Select((card, index) =>
+        {
+            var isHidden = hideHoleCard && index == 1;
+            return new CardDto
+            {
+                Display = isHidden ? "" : card.Display,
+                IsRed = !isHidden && card.IsRed,
+                IsHidden = isHidden
+            };
+        }).ToList()
+    };
 
     private void DealInitialCards(GameState game)
     {
         var deck = _decks[game.GameId];
+        deck.Reset();
         foreach (var p in game.Players) { p.Hand.Add(deck.Deal()); p.Hand.Add(deck.Deal()); }
         game.Dealer.Hand.Add(deck.Deal());
         game.Dealer.Hand.Add(deck.Deal());
@@ -136,42 +351,15 @@ public class GameService
         game.Message = $"{game.Players[0].Name}'s turn";
 
         foreach (var p in game.Players)
-            if (p.HasBlackjack) p.Status = PlayerStatus.Blackjack;
+            p.Status = p.HasBlackjack ? PlayerStatus.Blackjack : PlayerStatus.Playing;
 
         AdvanceIfNeeded(game);
-    }
-
-    public bool Hit(string gameId, string connectionId)
-    {
-        var game = GetGame(gameId);
-        var player = game?.CurrentPlayer;
-        if (player == null || player.ConnectionId != connectionId) return false;
-
-        player.Hand.Add(_decks[gameId].Deal());
-
-        if (player.IsBusted)
-        {
-            player.Status = PlayerStatus.Busted;
-            AdvancePlayer(game!);
-        }
-        return true;
-    }
-
-    public bool Stand(string gameId, string connectionId)
-    {
-        var game = GetGame(gameId);
-        var player = game?.CurrentPlayer;
-        if (player == null || player.ConnectionId != connectionId) return false;
-
-        player.Status = PlayerStatus.Standing;
-        AdvancePlayer(game!);
-        return true;
     }
 
     private void AdvanceIfNeeded(GameState game)
     {
         while (game.CurrentPlayerIndex < game.Players.Count &&
-               game.Players[game.CurrentPlayerIndex].Status != PlayerStatus.Waiting)
+               game.Players[game.CurrentPlayerIndex].Status != PlayerStatus.Playing)
         {
             game.CurrentPlayerIndex++;
         }
@@ -223,12 +411,4 @@ public class GameService
         game.Message = "Round over! Ready for next round?";
     }
 
-    public void ResetRound(string gameId)
-    {
-        var game = GetGame(gameId);
-        if (game == null) return;
-        game.Players.RemoveAll(p => p.Chips <= 0);
-        game.Phase = GamePhase.Lobby;
-        game.Message = "Waiting for players...";
-    }
 }
