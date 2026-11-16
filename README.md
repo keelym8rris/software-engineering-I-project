@@ -24,14 +24,24 @@ To test multiplayer, open the same URL in a second browser tab or window.
 
 ## How to play
 
-1. Enter your name and click **Create New Game**
-2. Share the game ID with other players — they enter their name and click **Join** on the lobby screen
+1. From **/play**, choose Solo to start a single-player game, or Multiplayer to host or join a table
+2. For multiplayer, click **Host Lobby**, then share the 8-character code; other players choose Multiplayer and click **Join Lobby**
 3. Once players have joined, click **Start Game** to begin the betting round
 4. Each player places a bet (use the quick-bet buttons or type an amount)
 5. Once all bets are placed, cards are dealt automatically
 6. On your turn, click **Hit** to draw a card or **Stand** to hold
 7. After all players act, the dealer draws to 17
 8. Winnings are settled automatically — blackjack pays 1.5x
+
+### Chip balances
+
+Each Blackjack seat starts with 1,000 virtual chips. Balances belong to the current in-memory seat/session only; leaving and creating a new table starts a fresh balance. They are not saved across server restarts. Bets are whole chips, with a minimum of 10. Ordinary wins add the wager, losses subtract it, pushes leave the balance unchanged, and natural blackjack adds 1.5 times the wager without rounding (a 25-chip bet earns 37.5). A dealer natural beats any non-natural hand, including a three-card 21.
+
+After a round, players with fewer than 10 chips can select **Start a fresh table**. They are removed when the next round is prepared, and the host role passes to a remaining player if needed. This prevents fractional or zero balances from blocking everyone in betting.
+
+### Regression tests
+
+Run `dotnet test BlackjackApp.Tests` for deterministic payout, bet-validation, and low-balance lifecycle checks.
 
 ## Project structure
 
@@ -48,8 +58,8 @@ BlackjackApp/
 ├── Services/
 │   └── GameService.cs        # Game logic (singleton)
 ├── Pages/
-│   ├── Index.razor            # Lobby
-│   └── Game.razor             # Game table
+│   ├── Index.razor            # Home and Blackjack lobby
+│   └── Game.razor             # Blackjack game table
 └── Program.cs
 ```
 
