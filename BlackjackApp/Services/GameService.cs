@@ -4,6 +4,8 @@ namespace BlackjackApp.Services;
 
 public class GameService
 {
+    public const int MinimumBet = 10;
+
     private readonly object _sync = new();
     private readonly Dictionary<string, GameState> _games = new();
     private readonly Dictionary<string, Deck> _decks = new();
@@ -226,9 +228,9 @@ public class GameService
                 return false;
             }
 
-            if (amount < 10)
+            if (amount < MinimumBet)
             {
-                error = "The minimum bet is $10.";
+                error = $"The minimum bet is {MinimumBet} chips.";
                 return false;
             }
 
@@ -292,7 +294,7 @@ public class GameService
             var game = GetGameUnsafe(gameId);
             if (game == null || game.Phase != GamePhase.RoundOver) return false;
 
-            var eliminated = game.Players.Where(p => p.Chips <= 0).ToList();
+            var eliminated = game.Players.Where(p => p.Chips < MinimumBet).ToList();
             foreach (var player in eliminated)
             {
                 game.Players.Remove(player);
@@ -391,14 +393,22 @@ public class GameService
     {
         int dealerValue = game.Dealer.HandValue;
         bool dealerBusted = game.Dealer.IsBusted;
+        bool dealerBlackjack = game.Dealer.HasBlackjack;
 
         foreach (var p in game.Players)
         {
-            if (p.Status == PlayerStatus.Busted) { p.Chips -= p.CurrentBet; p.Status = PlayerStatus.Lost; continue; }
-
-            if (p.Status == PlayerStatus.Blackjack && !game.Dealer.HasBlackjack)
+            if (p.IsBusted || (dealerBlackjack && !p.HasBlackjack))
             {
-                p.Chips += (int)(p.CurrentBet * 1.5); p.Status = PlayerStatus.Won; continue;
+                p.Chips -= p.CurrentBet;
+                p.Status = PlayerStatus.Lost;
+                continue;
+            }
+
+            if (p.HasBlackjack && !dealerBlackjack)
+            {
+                p.Chips += p.CurrentBet * 1.5m;
+                p.Status = PlayerStatus.Won;
+                continue;
             }
 
             int pv = p.HandValue;
