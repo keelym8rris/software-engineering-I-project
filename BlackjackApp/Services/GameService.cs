@@ -273,7 +273,7 @@ public class GameService
                 error = "This game has already started.";
             else if (game.Players.Count < 1)
                 error = "At least one player is required to start.";
-            else if (game.Mode == GameMode.Multiplayer && game.Players.Count < 2)
+            else if (game.Mode == GameMode.Multiplayer && game.Players.Count < 2 && game.Spectators.Count == 0)
                 error = "At least two players are required for multiplayer. Share your lobby code with a friend.";
 
             if (!string.IsNullOrEmpty(error)) return false;
