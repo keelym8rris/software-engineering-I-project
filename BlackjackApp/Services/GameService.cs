@@ -5,6 +5,9 @@ namespace BlackjackApp.Services;
 public class GameService
 {
     public const int MinimumBet = 10;
+    public const int MaxChatLength = 200;
+    public const int MaxChatHistory = 40;
+    public const int ChatColorCount = 12;
 
     private readonly object _sync = new();
     private readonly Dictionary<string, GameState> _games = new();
@@ -68,10 +71,24 @@ public class GameService
             var returningPlayer = priorConnectionId == null
                 ? null
                 : game.Players.FirstOrDefault(p => p.ConnectionId == priorConnectionId);
+            var returningSpectator = priorConnectionId == null
+                ? null
+                : game.Spectators.FirstOrDefault(s => s.ConnectionId == priorConnectionId);
+            if (returningSpectator != null)
+            {
+                _connectionIndex.Remove(returningSpectator.ConnectionId);
+                if (game.ChatSenderColors.Remove(returningSpectator.ConnectionId, out var existingColor))
+                    game.ChatSenderColors[connectionId] = existingColor;
+                returningSpectator.ConnectionId = connectionId;
+                _connectionIndex[connectionId] = gameId;
+                return true;
+            }
 
             if (returningPlayer != null)
             {
                 _connectionIndex.Remove(returningPlayer.ConnectionId);
+                if (game.ChatSenderColors.Remove(returningPlayer.ConnectionId, out var existingColor))
+                    game.ChatSenderColors[connectionId] = existingColor;
                 returningPlayer.ConnectionId = connectionId;
                 _connectionIndex[connectionId] = gameId;
                 if (game.HostConnectionId == priorConnectionId)
@@ -115,7 +132,9 @@ public class GameService
                 Message = game.Message,
                 CurrentPlayerConnectionId = game.CurrentPlayer?.ConnectionId,
                 Dealer = MapPlayer(game.Dealer, game.Phase == GamePhase.Playing),
-                Players = game.Players.Select(player => MapPlayer(player)).ToList()
+                Players = game.Players.Select(player => MapPlayer(player)).ToList(),
+                Spectators = game.Spectators.Select(s => new SpectatorDto { ConnectionId = s.ConnectionId, Name = s.Name }).ToList(),
+                ChatMessages = game.ChatMessages.Select(m => new ChatMessageDto { Sender = m.Sender, Text = m.Text, ColorIndex = m.ColorIndex }).ToList()
             };
         }
     }
@@ -133,7 +152,14 @@ public class GameService
             if (!_games.TryGetValue(gameId, out var game)) return false;
 
             var player = game.Players.FirstOrDefault(p => p.ConnectionId == connectionId);
-            if (player == null) return false;
+            if (player == null)
+            {
+                var spectator = game.Spectators.FirstOrDefault(s => s.ConnectionId == connectionId);
+                if (spectator == null) return false;
+                game.Spectators.Remove(spectator);
+                _connectionIndex.Remove(connectionId);
+                return true;
+            }
 
             int removedIndex = game.Players.IndexOf(player);
             bool wasCurrentPlayer = game.Phase == GamePhase.Playing &&
@@ -145,6 +171,8 @@ public class GameService
 
             if (game.Players.Count == 0)
             {
+                foreach (var spectator in game.Spectators)
+                    _connectionIndex.Remove(spectator.ConnectionId);
                 _games.Remove(gameId);
                 _decks.Remove(gameId);
                 return true;
@@ -173,6 +201,81 @@ public class GameService
         }
     }
 
+
+    public bool TrySpectate(string gameId, string connectionId, out string error)
+    {
+        lock (_sync)
+        {
+            error = "";
+            var game = GetGameUnsafe(gameId);
+            if (game == null || game.Mode != GameMode.Multiplayer)
+            {
+                error = "Spectating is available only in multiplayer tables.";
+                return false;
+            }
+            if (game.Spectators.Any(s => s.ConnectionId == connectionId)) return true;
+            var player = game.Players.FirstOrDefault(p => p.ConnectionId == connectionId);
+            if (player == null || game.Phase != GamePhase.RoundOver || player.Chips >= MinimumBet)
+            {
+                error = "You can spectate only after a round when you have fewer than 10 chips.";
+                return false;
+            }
+            var remaining = game.Players.Where(p => p.ConnectionId != connectionId && p.Chips >= MinimumBet).ToList();
+            if (remaining.Count == 0)
+            {
+                error = "No funded players remain. Return to game selection.";
+                return false;
+            }
+            game.Players.Remove(player);
+            game.Spectators.Add(new Spectator { ConnectionId = connectionId, Name = player.Name });
+            if (game.HostConnectionId == connectionId)
+                game.HostConnectionId = remaining[0].ConnectionId;
+            return true;
+        }
+    }
+
+    public bool TrySendChat(string gameId, string connectionId, string? message, out string error)
+    {
+        lock (_sync)
+        {
+            error = "";
+            var game = GetGameUnsafe(gameId);
+            if (game == null || game.Mode != GameMode.Multiplayer)
+            {
+                error = "Chat is available only in multiplayer games.";
+                return false;
+            }
+            var player = game.Players.FirstOrDefault(p => p.ConnectionId == connectionId);
+            var spectator = game.Spectators.FirstOrDefault(s => s.ConnectionId == connectionId);
+            if (player == null && spectator == null)
+            {
+                error = "Join this game before sending a message.";
+                return false;
+            }
+            var text = message?.Trim() ?? "";
+            if (text.Length == 0 || text.Length > MaxChatLength || text.Any(char.IsControl))
+            {
+                error = "Enter a message between 1 and 200 characters with no control characters.";
+                return false;
+            }
+            // Store a color per participant rather than per display name, since names can repeat.
+            if (!game.ChatSenderColors.TryGetValue(connectionId, out var colorIndex))
+            {
+                colorIndex = game.ChatSenderColors.Count % ChatColorCount;
+                game.ChatSenderColors[connectionId] = colorIndex;
+            }
+            game.ChatMessages.Add(new ChatMessage
+            {
+                Sender = player?.Name ?? spectator!.Name,
+                Text = text,
+                ColorIndex = colorIndex
+            });
+            if (game.ChatMessages.Count > MaxChatHistory)
+                game.ChatMessages.RemoveRange(0, game.ChatMessages.Count - MaxChatHistory);
+            return true;
+        }
+    }
+
     public bool StartBetting(string gameId, string connectionId, out string error)
     {
         lock (_sync)
@@ -186,7 +289,7 @@ public class GameService
                 error = "This game has already started.";
             else if (game.Players.Count < 1)
                 error = "At least one player is required to start.";
-            else if (game.Mode == GameMode.Multiplayer && game.Players.Count < 2)
+            else if (game.Mode == GameMode.Multiplayer && game.Players.Count < 2 && game.Spectators.Count == 0)
                 error = "At least two players are required for multiplayer. Share your lobby code with a friend.";
 
             if (!string.IsNullOrEmpty(error)) return false;
@@ -287,22 +390,29 @@ public class GameService
         }
     }
 
-    public bool ResetRound(string gameId)
+    public bool ResetRound(string gameId, string? requestingConnectionId = null)
     {
         lock (_sync)
         {
             var game = GetGameUnsafe(gameId);
             if (game == null || game.Phase != GamePhase.RoundOver) return false;
+            if (requestingConnectionId != null && !game.Players.Any(p => p.ConnectionId == requestingConnectionId))
+                return false;
 
             var eliminated = game.Players.Where(p => p.Chips < MinimumBet).ToList();
             foreach (var player in eliminated)
             {
                 game.Players.Remove(player);
-                _connectionIndex.Remove(player.ConnectionId);
+                if (game.Mode == GameMode.Multiplayer)
+                    game.Spectators.Add(new Spectator { ConnectionId = player.ConnectionId, Name = player.Name });
+                else
+                    _connectionIndex.Remove(player.ConnectionId);
             }
 
             if (game.Players.Count == 0)
             {
+                foreach (var spectator in game.Spectators)
+                    _connectionIndex.Remove(spectator.ConnectionId);
                 _games.Remove(gameId);
                 _decks.Remove(gameId);
                 return true;
