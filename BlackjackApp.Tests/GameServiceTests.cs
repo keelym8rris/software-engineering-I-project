@@ -220,6 +220,10 @@ public class GameServiceTests
         Assert.False(service.StartBetting(game.GameId, "player", out _));
         Assert.False(service.ResetRound(game.GameId, "player"));
         Assert.True(service.ResetRound(game.GameId, "finisher"));
+        Assert.True(service.StartBetting(game.GameId, "finisher", out _));
+        Assert.True(service.PlaceBet(game.GameId, "finisher", 10, out _));
+        Assert.NotEqual(GamePhase.Betting, game.Phase);
+        Assert.Contains(service.GetGameState(game.GameId)!.Spectators, s => s.ConnectionId == "player");
     }
 
     [Fact]
