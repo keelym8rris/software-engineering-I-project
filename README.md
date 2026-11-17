@@ -39,9 +39,24 @@ Each Blackjack seat starts with 1,000 virtual chips. Balances belong to the curr
 
 After a round, players with fewer than 10 chips can select **Start a fresh table**. They are removed when the next round is prepared, and the host role passes to a remaining player if needed. This prevents fractional or zero balances from blocking everyone in betting.
 
-### Regression tests
+### Multiplayer chat and spectating
 
-Run `dotnet test BlackjackApp.Tests` for deterministic payout, bet-validation, and low-balance lifecycle checks.
+Players can send short text-only messages to their multiplayer table during lobby setup and gameplay. Messages are assigned to the connected player's name by the server, limited to 200 characters, and only the most recent 40 are held in memory. Spectators can chat too. Chat is not persistent and is not available in solo games.
+
+After a multiplayer round, players with fewer than 10 chips can select **Spectate table** instead of starting a new table. Spectators keep their table connection and can watch and chat without wagering or taking turns. A player eliminated by the next-round reset automatically becomes a spectator. If only one funded player remains, that player may continue playing while the others spectate. If nobody can play, the table closes. Reconnection currently relies on the app's existing connection-ID behavior; full security hardening is still a separate task.
+
+### Automated tests and GitHub Actions
+
+Run locally from the repository root:
+
+```shell
+dotnet restore BlackjackApp.Tests/BlackjackApp.Tests.csproj
+dotnet test BlackjackApp.Tests/BlackjackApp.Tests.csproj --configuration Release
+```
+
+GitHub Actions runs the xUnit suite on pushes to `keelys-edits`, `dev`, and `main`, on pull requests to `dev` or `main`, and with the manual **Run workflow** button.
+
+For your presentation, open **Actions → .NET tests → latest run**, expand the Test step to see the results, or download the TRX artifact. These are unit/service tests; also manually verify multiplayer chat and spectating in two browsers.
 
 ## Project structure
 
