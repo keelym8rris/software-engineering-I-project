@@ -125,8 +125,8 @@
             {
                 @if (_game.HostConnectionId == _myConnectionId)
                 {
-                    <button class="btn btn-primary" @onclick="StartBetting" disabled="@(_game.Mode == "Multiplayer" && _game.Players.Count < 2)">Start Game</button>
-                    @if (_game.Mode == "Multiplayer" && _game.Players.Count < 2)
+                    <button class="btn btn-primary" @onclick="StartBetting" disabled="@(_game.Mode == "Multiplayer" && _game.Players.Count < 2 && _game.Spectators.Count == 0)">Start Game</button>
+                    @if (_game.Mode == "Multiplayer" && _game.Players.Count < 2 && _game.Spectators.Count == 0)
                     {
                         <p class="muted">Waiting for a friend to join with your code. Multiplayer needs at least two players.</p>
                     }
