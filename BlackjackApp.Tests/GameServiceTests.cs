@@ -292,8 +292,9 @@ public class GameServiceTests
     private static (GameService Service, GameState Game) CreateTable()
     {
         var service = new GameService();
-        var id = service.CreateGame("player", "Keely", GameMode.Multiplayer);
-        Assert.True(service.TryJoinGame(id, "player", "Keely", null, out _));
+        // The home-page SignalR connection is replaced by the table-page connection.
+        var id = service.CreateGame("lobby-connection", "Keely", GameMode.Multiplayer);
+        Assert.True(service.TryJoinGame(id, "player", "Keely", "lobby-connection", out _));
         Assert.True(service.TryJoinGame(id, "finisher", "Friend", null, out _));
         // Keep deterministic fixtures out of the production service API.
         var games = (Dictionary<string, GameState>)typeof(GameService)
