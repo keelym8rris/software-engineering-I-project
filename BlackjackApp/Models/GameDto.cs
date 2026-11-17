@@ -19,6 +19,18 @@ public class PlayerDto
     public int HandValue { get; set; }
 }
 
+public class SpectatorDto
+{
+    public string ConnectionId { get; set; } = "";
+    public string Name { get; set; } = "";
+}
+
+public class ChatMessageDto
+{
+    public string Sender { get; set; } = "";
+    public string Text { get; set; } = "";
+}
+
 public class GameStateDto
 {
     public string GameId { get; set; } = "";
@@ -27,6 +39,8 @@ public class GameStateDto
     public string Phase { get; set; } = "Lobby";
     public string Message { get; set; } = "";
     public List<PlayerDto> Players { get; set; } = new();
+    public List<SpectatorDto> Spectators { get; set; } = new();
+    public List<ChatMessageDto> ChatMessages { get; set; } = new();
     public PlayerDto Dealer { get; set; } = new();
     public string? CurrentPlayerConnectionId { get; set; }
 }
