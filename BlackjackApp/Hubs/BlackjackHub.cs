@@ -122,9 +122,29 @@ public class BlackjackHub : Hub
         await BroadcastState(gameId);
     }
 
+    public async Task Spectate(string gameId)
+    {
+        if (!_gameService.TrySpectate(gameId, Context.ConnectionId, out var error))
+        {
+            await Clients.Caller.SendAsync("Error", error);
+            return;
+        }
+        await BroadcastState(gameId);
+    }
+
+    public async Task SendChat(string gameId, string message)
+    {
+        if (!_gameService.TrySendChat(gameId, Context.ConnectionId, message, out var error))
+        {
+            await Clients.Caller.SendAsync("Error", error);
+            return;
+        }
+        await BroadcastState(gameId);
+    }
+
     public async Task NewRound(string gameId)
     {
-        if (!_gameService.ResetRound(gameId))
+        if (!_gameService.ResetRound(gameId, Context.ConnectionId))
         {
             await Clients.Caller.SendAsync("Error", "A new round can only start after the current round is over.");
             return;
