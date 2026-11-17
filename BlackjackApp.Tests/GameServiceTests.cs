@@ -185,6 +185,41 @@ public class GameServiceTests
     }
 
     [Fact]
+    public void DifferentChatParticipantsGetDifferentColorsEvenWithMatchingNames()
+    {
+        var (service, game) = CreateTable();
+        Assert.True(service.TryJoinGame(game.GameId, "another", "Keely", null, out _));
+        Assert.True(service.TrySendChat(game.GameId, "player", "Hi", out _));
+        Assert.True(service.TrySendChat(game.GameId, "another", "Hello", out _));
+
+        var messages = service.GetGameState(game.GameId)!.ChatMessages;
+        Assert.Equal("Keely", messages[0].Sender);
+        Assert.Equal("Keely", messages[1].Sender);
+        Assert.NotEqual(messages[0].ColorIndex, messages[1].ColorIndex);
+        Assert.InRange(messages[0].ColorIndex, 0, GameService.ChatColorCount - 1);
+        Assert.InRange(messages[1].ColorIndex, 0, GameService.ChatColorCount - 1);
+    }
+
+    [Fact]
+    public void ChatColorPersistsWhenSpectatingAndReconnecting()
+    {
+        var (service, game) = CreateTable();
+        Assert.True(service.TrySendChat(game.GameId, "player", "First", out _));
+        var assignedColor = service.GetGameState(game.GameId)!.ChatMessages[0].ColorIndex;
+
+        game.Phase = GamePhase.RoundOver;
+        game.Players[0].Chips = 5;
+        Assert.True(service.TrySpectate(game.GameId, "player", out _));
+        Assert.True(service.TrySendChat(game.GameId, "player", "Still watching", out _));
+
+        Assert.True(service.TryJoinGame(game.GameId, "player-reconnected", "Keely", "player", out _));
+        Assert.True(service.TrySendChat(game.GameId, "player-reconnected", "Back again", out _));
+
+        var messages = service.GetGameState(game.GameId)!.ChatMessages;
+        Assert.All(messages, message => Assert.Equal(assignedColor, message.ColorIndex));
+    }
+
+    [Fact]
     public void ChatKeepsOnlyMostRecentFortyMessages()
     {
         var (service, game) = CreateTable();

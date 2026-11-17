@@ -189,7 +189,7 @@
                     }
                     @foreach (var message in _game.ChatMessages)
                     {
-                        <p class="chat-message"><strong>@message.Sender:</strong> @message.Text</p>
+                        <p class="chat-message"><strong class="chat-sender chat-name-@(message.ColorIndex)">@message.Sender:</strong> @message.Text</p>
                     }
                 </div>
                 <form class="chat-form" @onsubmit="SendChat" @onsubmit:preventDefault>

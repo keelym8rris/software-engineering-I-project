@@ -381,7 +381,19 @@ body {
     padding: 0.5rem;
 }
 .chat-message { line-height: 1.4; }
-.chat-message strong { color: #f5c518; }
+.chat-message .chat-sender { font-weight: 700; }
+.chat-message .chat-name-0 { color: #ffd166; }
+.chat-message .chat-name-1 { color: #8ad5ff; }
+.chat-message .chat-name-2 { color: #ffa4ca; }
+.chat-message .chat-name-3 { color: #b7a0ff; }
+.chat-message .chat-name-4 { color: #8ce4c3; }
+.chat-message .chat-name-5 { color: #ffb88c; }
+.chat-message .chat-name-6 { color: #b9e586; }
+.chat-message .chat-name-7 { color: #f5a5ff; }
+.chat-message .chat-name-8 { color: #a2d2ff; }
+.chat-message .chat-name-9 { color: #ffcb90; }
+.chat-message .chat-name-10 { color: #a1eadf; }
+.chat-message .chat-name-11 { color: #e1b5ff; }
 .chat-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.75rem; }
 .chat-form label { width: 100%; font-weight: 600; }
 .chat-form input { flex: 1; min-width: 180px; }

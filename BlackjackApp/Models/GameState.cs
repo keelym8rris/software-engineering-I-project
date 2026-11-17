@@ -12,6 +12,8 @@ public class GameState
     public List<Player> Players { get; set; } = new();
     public List<Spectator> Spectators { get; set; } = new();
     public List<ChatMessage> ChatMessages { get; set; } = new();
+    // Distinct sender colors remain stable for each connected player/spectator.
+    public Dictionary<string, int> ChatSenderColors { get; set; } = new();
     public Player Dealer { get; set; } = new() { Name = "Dealer", IsDealer = true };
     public int CurrentPlayerIndex { get; set; } = 0;
     public string Message { get; set; } = "Waiting for players...";
@@ -34,4 +36,5 @@ public class ChatMessage
 {
     public string Sender { get; set; } = "";
     public string Text { get; set; } = "";
+    public int ColorIndex { get; set; }
 }

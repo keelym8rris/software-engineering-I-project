@@ -7,6 +7,7 @@ public class GameService
     public const int MinimumBet = 10;
     public const int MaxChatLength = 200;
     public const int MaxChatHistory = 40;
+    public const int ChatColorCount = 12;
 
     private readonly object _sync = new();
     private readonly Dictionary<string, GameState> _games = new();
@@ -76,6 +77,8 @@ public class GameService
             if (returningSpectator != null)
             {
                 _connectionIndex.Remove(returningSpectator.ConnectionId);
+                if (game.ChatSenderColors.Remove(returningSpectator.ConnectionId, out var existingColor))
+                    game.ChatSenderColors[connectionId] = existingColor;
                 returningSpectator.ConnectionId = connectionId;
                 _connectionIndex[connectionId] = gameId;
                 return true;
@@ -84,6 +87,8 @@ public class GameService
             if (returningPlayer != null)
             {
                 _connectionIndex.Remove(returningPlayer.ConnectionId);
+                if (game.ChatSenderColors.Remove(returningPlayer.ConnectionId, out var existingColor))
+                    game.ChatSenderColors[connectionId] = existingColor;
                 returningPlayer.ConnectionId = connectionId;
                 _connectionIndex[connectionId] = gameId;
                 if (game.HostConnectionId == priorConnectionId)
@@ -129,7 +134,7 @@ public class GameService
                 Dealer = MapPlayer(game.Dealer, game.Phase == GamePhase.Playing),
                 Players = game.Players.Select(player => MapPlayer(player)).ToList(),
                 Spectators = game.Spectators.Select(s => new SpectatorDto { ConnectionId = s.ConnectionId, Name = s.Name }).ToList(),
-                ChatMessages = game.ChatMessages.Select(m => new ChatMessageDto { Sender = m.Sender, Text = m.Text }).ToList()
+                ChatMessages = game.ChatMessages.Select(m => new ChatMessageDto { Sender = m.Sender, Text = m.Text, ColorIndex = m.ColorIndex }).ToList()
             };
         }
     }
@@ -253,7 +258,18 @@ public class GameService
                 error = "Enter a message between 1 and 200 characters with no control characters.";
                 return false;
             }
-            game.ChatMessages.Add(new ChatMessage { Sender = player?.Name ?? spectator!.Name, Text = text });
+            // Store a color per participant rather than per display name, since names can repeat.
+            if (!game.ChatSenderColors.TryGetValue(connectionId, out var colorIndex))
+            {
+                colorIndex = game.ChatSenderColors.Count % ChatColorCount;
+                game.ChatSenderColors[connectionId] = colorIndex;
+            }
+            game.ChatMessages.Add(new ChatMessage
+            {
+                Sender = player?.Name ?? spectator!.Name,
+                Text = text,
+                ColorIndex = colorIndex
+            });
             if (game.ChatMessages.Count > MaxChatHistory)
                 game.ChatMessages.RemoveRange(0, game.ChatMessages.Count - MaxChatHistory);
             return true;

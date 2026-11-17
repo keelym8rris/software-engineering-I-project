@@ -29,6 +29,7 @@ public class ChatMessageDto
 {
     public string Sender { get; set; } = "";
     public string Text { get; set; } = "";
+    public int ColorIndex { get; set; }
 }
 
 public class GameStateDto
