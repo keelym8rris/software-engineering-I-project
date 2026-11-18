@@ -15,7 +15,7 @@ public class BlackjackHub : Hub
         _logger = logger;
     }
 
-    public async Task CreateGame(string playerName, string mode)
+    public async Task CreateGame(string playerName, string mode, string? playerAvatar = null)
     {
         var name = NormalizePlayerName(playerName);
         if (name.Length == 0)
@@ -30,10 +30,12 @@ public class BlackjackHub : Hub
             return;
         }
 
+        
+
         string? gameId = null;
         try
         {
-            gameId = _gameService.CreateGame(Context.ConnectionId, name, gameMode);
+            gameId = _gameService.CreateGame(Context.ConnectionId, name, gameMode, NormalizePlayerAvatar(playerAvatar) );
             await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
             await BroadcastState(gameId);
             await Clients.Caller.SendAsync("GameCreated", gameId, Context.ConnectionId);
@@ -59,7 +61,7 @@ public class BlackjackHub : Hub
         }
     }
 
-    public async Task JoinGame(string gameId, string playerName, string? existingConnectionId = null)
+    public async Task JoinGame(string gameId, string playerName, string? existingConnectionId = null, string? playerAvatar = null)
     {
         gameId = gameId?.Trim().ToUpperInvariant() ?? "";
         var name = NormalizePlayerName(playerName);
@@ -69,7 +71,7 @@ public class BlackjackHub : Hub
             return;
         }
 
-        if (!_gameService.TryJoinGame(gameId, Context.ConnectionId, name, existingConnectionId, out var error))
+        if (!_gameService.TryJoinGame(gameId, Context.ConnectionId, name, existingConnectionId, NormalizePlayerAvatar(playerAvatar), out var error))
         {
             await Clients.Caller.SendAsync("Error", error);
             return;
@@ -158,4 +160,18 @@ public class BlackjackHub : Hub
         var trimmed = name?.Trim() ?? "";
         return trimmed[..Math.Min(trimmed.Length, 20)];
     }
+
+    private static string? NormalizePlayerAvatar(string? avatar)
+{
+    if (string.IsNullOrWhiteSpace(avatar))
+        return null;
+
+    if (avatar.Length > 2_100_000)
+        return null;
+
+    if (!avatar.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+        return null;
+
+    return avatar;
+}
 }

@@ -220,7 +220,15 @@ else
         {
             _playerName = _playerName.Trim();
             await JS.InvokeVoidAsync("localStorage.setItem", PlayerNameStorageKey, _playerName);
-            await _hub.InvokeAsync("CreateGame", _playerName, _selectedMode.Value.ToString());
+            var playerAvatar = await JS.InvokeAsync<string?>(
+                "localStorage.getItem",
+                "blackjack.playerAvatar");
+
+            await _hub.InvokeAsync(
+                "CreateGame",
+                _playerName,
+                _selectedMode.Value.ToString(),
+                playerAvatar);
         }
         catch (Exception ex)
         {

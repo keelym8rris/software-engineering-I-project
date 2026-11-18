@@ -12,7 +12,7 @@ public class GameService
     // Maps connectionId -> gameId for fast disconnect lookup
     private readonly Dictionary<string, string> _connectionIndex = new();
 
-    public string CreateGame(string hostConnectionId, string hostName, GameMode mode)
+    public string CreateGame(string hostConnectionId, string hostName, GameMode mode, string? hostAvatar = null)
     {
         if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
 
@@ -22,7 +22,7 @@ public class GameService
             while (_games.ContainsKey(game.GameId))
                 game.GameId = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
 
-            game.Players.Add(new Player { ConnectionId = hostConnectionId, Name = hostName });
+            game.Players.Add(new Player { ConnectionId = hostConnectionId, Name = hostName, Avatar = hostAvatar });
             _games.Add(game.GameId, game);
             try
             {
@@ -54,51 +54,73 @@ public class GameService
         }
     }
 
-    public bool TryJoinGame(string gameId, string connectionId, string name, string? priorConnectionId, out string error)
+   public bool TryJoinGame(
+    string gameId,
+    string connectionId,
+    string name,
+    string? priorConnectionId,
+    string? playerAvatar,
+    out string error)
+{
+    lock (_sync)
     {
-        lock (_sync)
+        error = "";
+
+        if (!_games.TryGetValue(gameId, out var game))
         {
-            error = "";
-            if (!_games.TryGetValue(gameId, out var game))
-            {
-                error = "No lobby found with that code. Check it and try again.";
-                return false;
-            }
+            error = "No lobby found with that code. Check it and try again.";
+            return false;
+        }
 
-            var returningPlayer = priorConnectionId == null
-                ? null
-                : game.Players.FirstOrDefault(p => p.ConnectionId == priorConnectionId);
+        var returningPlayer = priorConnectionId == null
+            ? null
+            : game.Players.FirstOrDefault(
+                p => p.ConnectionId == priorConnectionId);
 
-            if (returningPlayer != null)
-            {
-                _connectionIndex.Remove(returningPlayer.ConnectionId);
-                returningPlayer.ConnectionId = connectionId;
-                _connectionIndex[connectionId] = gameId;
-                if (game.HostConnectionId == priorConnectionId)
-                    game.HostConnectionId = connectionId;
-                return true;
-            }
+        if (returningPlayer != null)
+        {
+            _connectionIndex.Remove(returningPlayer.ConnectionId);
 
-            if (game.Players.Any(p => p.ConnectionId == connectionId))
-                return true;
+            returningPlayer.ConnectionId = connectionId;
 
-            if (game.Mode == GameMode.Solo)
-            {
-                error = "This table is for solo play. Start your own solo game from the play menu.";
-                return false;
-            }
+            if (!string.IsNullOrWhiteSpace(playerAvatar))
+                returningPlayer.Avatar = playerAvatar;
 
-            if (game.Phase != GamePhase.Lobby || game.Players.Count >= 6)
-            {
-                error = "Cannot join this game. It may be full or already started.";
-                return false;
-            }
-
-            game.Players.Add(new Player { ConnectionId = connectionId, Name = name });
             _connectionIndex[connectionId] = gameId;
+
+            if (game.HostConnectionId == priorConnectionId)
+                game.HostConnectionId = connectionId;
+
             return true;
         }
+
+        if (game.Players.Any(p => p.ConnectionId == connectionId))
+            return true;
+
+        if (game.Mode == GameMode.Solo)
+        {
+            error = "This table is for solo play. Start your own solo game from the play menu.";
+            return false;
+        }
+
+        if (game.Phase != GamePhase.Lobby || game.Players.Count >= 6)
+        {
+            error = "Cannot join this game. It may be full or already started.";
+            return false;
+        }
+
+        game.Players.Add(new Player
+        {
+            ConnectionId = connectionId,
+            Name = name,
+            Avatar = playerAvatar
+        });
+
+        _connectionIndex[connectionId] = gameId;
+
+        return true;
     }
+}
 
     public GameStateDto? GetGameState(string gameId)
     {
@@ -324,6 +346,7 @@ public class GameService
     {
         ConnectionId = player.ConnectionId,
         Name = player.Name,
+        Avatar = player.Avatar,
         Chips = player.Chips,
         CurrentBet = player.CurrentBet,
         HandValue = hideHoleCard ? 0 : player.HandValue,

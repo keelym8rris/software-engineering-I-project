@@ -12,6 +12,7 @@ public class PlayerDto
 {
     public string ConnectionId { get; set; } = "";
     public string Name { get; set; } = "";
+    public string? Avatar { get; set; }
     public List<CardDto> Hand { get; set; } = new();
     public string Status { get; set; } = "Waiting";
     public decimal Chips { get; set; }
