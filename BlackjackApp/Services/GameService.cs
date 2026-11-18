@@ -253,9 +253,9 @@ public class GameService
                 return false;
             }
             var text = message?.Trim() ?? "";
-            if (text.Length == 0 || text.Length > MaxChatLength || text.Any(char.IsControl))
+            if (text.Length == 0 || text.Length > MaxChatLength || text.Any(char.IsControl) || text.Any(c => c == '<') || text.Any(c => c == '>') || text.Any(c => c == '\\') || text.Any(c => c == '`'))
             {
-                error = "Enter a message between 1 and 200 characters with no control characters.";
+                error = "Enter a message between 1 and 200 without invalid characters (<>\\`).";
                 return false;
             }
             // Store a color per participant rather than per display name, since names can repeat.
