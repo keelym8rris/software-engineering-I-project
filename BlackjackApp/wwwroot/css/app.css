@@ -419,6 +419,43 @@ body {
 .balance-notice h2 { margin-bottom: 0.75rem; font-size: 1.3rem; color: #f5c518; }
 .balance-notice p { margin-bottom: 1rem; line-height: 1.5; }
 .balance-notice .btn { margin: 0.25rem; }
+
+.chat-panel {
+    width: 100%;
+    padding: 1.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.25);
+}
+.chat-panel h2 { font-size: 1.15rem; margin-bottom: 0.8rem; }
+.chat-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-height: 80px;
+    max-height: 210px;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+    padding: 0.5rem;
+}
+.chat-message { line-height: 1.4; }
+.chat-message .chat-sender { font-weight: 700; }
+.chat-message .chat-name-0 { color: #ffd166; }
+.chat-message .chat-name-1 { color: #8ad5ff; }
+.chat-message .chat-name-2 { color: #ffa4ca; }
+.chat-message .chat-name-3 { color: #b7a0ff; }
+.chat-message .chat-name-4 { color: #8ce4c3; }
+.chat-message .chat-name-5 { color: #ffb88c; }
+.chat-message .chat-name-6 { color: #b9e586; }
+.chat-message .chat-name-7 { color: #f5a5ff; }
+.chat-message .chat-name-8 { color: #a2d2ff; }
+.chat-message .chat-name-9 { color: #ffcb90; }
+.chat-message .chat-name-10 { color: #a1eadf; }
+.chat-message .chat-name-11 { color: #e1b5ff; }
+.chat-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.75rem; }
+.chat-form label { width: 100%; font-weight: 600; }
+.chat-form input { flex: 1; min-width: 180px; }
+.spectator-list { text-align: center; color: #d4e1d6; font-size: 0.9rem; }
 .player-bet { font-size: 0.85rem; opacity: 0.7; margin-bottom: 0.3rem; }
 .hand-value { font-size: 0.85rem; margin-top: 0.3rem; }
 

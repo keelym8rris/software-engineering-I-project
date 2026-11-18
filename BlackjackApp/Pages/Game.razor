@@ -130,13 +130,25 @@
 
         <!-- Actions -->
         <div class="actions">
-            @if (Me == null || (Me.Chips < GameService.MinimumBet && (_game.Phase == "RoundOver" || _game.Phase == "Betting")))
+            @if (IsSpectator)
             {
-                <section class="balance-notice" aria-labelledby="balance-heading" role="status">
-                    <h2 id="balance-heading">Ready for a fresh table?</h2>
+                <section class="balance-notice" role="status" aria-labelledby="spectating-heading">
+                    <h2 id="spectating-heading">You're spectating</h2>
+                    <p>You can watch your friends play and chat, but cannot place bets or take turns.</p>
+                    <button class="btn btn-secondary" @onclick="LeaveGame">Leave table</button>
+                </section>
+            }
+            else if (Me == null || (Me.Chips < GameService.MinimumBet && (_game.Phase == "RoundOver" || _game.Phase == "Betting")))
+            {
+                <section class="balance-notice" role="status" aria-labelledby="balance-heading">
+                    <h2 id="balance-heading">Out of chips?</h2>
                     <p>@(Me == null ? "Your seat has closed." : $"Your balance of {Me.Chips:N1} chips is below the {GameService.MinimumBet}-chip minimum bet.")</p>
-                    <p>Each new table starts you with 1,000 virtual chips. Balances stay with this session.</p>
-                    <button class="btn btn-primary" @onclick="StartFreshTable">Start a fresh table</button>
+                    @if (Me != null && _game.Mode == "Multiplayer" && _game.Phase == "RoundOver" &&
+                         _game.Players.Any(p => p.ConnectionId != _myConnectionId && p.Chips >= GameService.MinimumBet))
+                    {
+                        <p>Stay at this table to watch and chat.</p>
+                        <button class="btn btn-primary" @onclick="Spectate">Spectate table</button>
+                    }
                     <button class="btn btn-secondary" @onclick="LeaveGame">Back to games</button>
                 </section>
             }
@@ -144,8 +156,8 @@
             {
                 @if (_game.HostConnectionId == _myConnectionId)
                 {
-                    <button class="btn btn-primary" @onclick="StartBetting" disabled="@(_game.Mode == "Multiplayer" && _game.Players.Count < 2)">Start Game</button>
-                    @if (_game.Mode == "Multiplayer" && _game.Players.Count < 2)
+                    <button class="btn btn-primary" @onclick="StartBetting" disabled="@(_game.Mode == "Multiplayer" && _game.Players.Count < 2 && _game.Spectators.Count == 0)">Start Game</button>
+                    @if (_game.Mode == "Multiplayer" && _game.Players.Count < 2 && _game.Spectators.Count == 0)
                     {
                         <p class="muted">Waiting for a friend to join with your code. Multiplayer needs at least two players.</p>
                     }
@@ -196,6 +208,33 @@
                 <button class="btn btn-secondary" @onclick="LeaveGame">Leave</button>
             }
         </div>
+
+        @if (_game.Mode == "Multiplayer" && (Me != null || IsSpectator))
+        {
+            <section class="chat-panel" aria-labelledby="chat-heading">
+                <h2 id="chat-heading">Table chat</h2>
+                <div class="chat-messages" role="log" aria-live="polite" aria-relevant="additions">
+                    @if (_game.ChatMessages.Count == 0)
+                    {
+                        <p class="muted">No messages yet. Say hello!</p>
+                    }
+                    @foreach (var message in _game.ChatMessages)
+                    {
+                        <p class="chat-message"><strong class="chat-sender chat-name-@(message.ColorIndex)">@message.Sender:</strong> @message.Text</p>
+                    }
+                </div>
+                <form class="chat-form" @onsubmit="SendChat" @onsubmit:preventDefault>
+                    <label for="chat-input">Message</label>
+                    <input id="chat-input" class="input" @bind="_chatText" @bind:event="oninput" maxlength="200"
+                           autocomplete="off" placeholder="Message your table..." />
+                    <button type="submit" class="btn btn-primary" disabled="@string.IsNullOrWhiteSpace(_chatText)">Send</button>
+                </form>
+            </section>
+        }
+        @if (_game.Mode == "Multiplayer" && _game.Spectators.Count > 0)
+        {
+            <p class="spectator-list">Spectating: @string.Join(", ", _game.Spectators.Select(s => s.Name))</p>
+        }
     }
 </div>
 
@@ -213,7 +252,9 @@
     private string? _playerAvatar;
     private bool _joining;
     private int _betAmount = 10;
+    private string _chatText = "";
     private PlayerDto? Me => _game?.Players.FirstOrDefault(p => p.ConnectionId == _myConnectionId);
+    private bool IsSpectator => _game?.Spectators.Any(s => s.ConnectionId == _myConnectionId) == true;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -304,7 +345,14 @@
     private async Task Stand() => await SendHubRequestAsync("Stand", GameId);
     private async Task NewRound() => await SendHubRequestAsync("NewRound", GameId);
     private void LeaveGame() => Nav.NavigateTo("/");
-    private void StartFreshTable() => Nav.NavigateTo("/play");
+    private async Task Spectate() => await SendHubRequestAsync("Spectate", GameId);
+    private async Task SendChat()
+    {
+        var message = _chatText.Trim();
+        if (message.Length == 0) return;
+        await SendHubRequestAsync("SendChat", GameId, message);
+        _chatText = "";
+    }
 
     private void UpdateGameState(GameStateDto state) => _ = InvokeAsync(() =>
     {
