@@ -187,11 +187,11 @@
         }
     }
     </div>
-    @if (CanUseChat)
+    @if (_game != null && CanUseChat)
     {
         <aside class="chat-panel @(_chatCollapsed ? "is-collapsed" : "")" aria-label="Table chat">
             <button type="button" class="chat-dock-tab" @onclick="ToggleChatCollapsed"
-                    aria-expanded="@(!_chatCollapsed)" aria-controls="table-chat-content"
+                    aria-expanded="@(!_chatCollapsed)"
                     aria-label="@(_chatCollapsed ? "Expand table chat" : "Collapse table chat")"
                     title="@(_chatCollapsed ? "Open chat" : "Collapse chat")">
                 <span aria-hidden="true">@(_chatCollapsed ? "‹" : "›")</span>
