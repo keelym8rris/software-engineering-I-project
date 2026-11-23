@@ -362,128 +362,139 @@ body {
 .balance-notice p { margin-bottom: 1rem; line-height: 1.5; }
 .balance-notice .btn { margin: 0.25rem; }
 
-/* Edge-docked multiplayer chat: the game stays centered independently. */
+/* Minimal app sidebar: flush with the right edge, no floating-card treatment. */
 .game-layout {
+    --chat-width: clamp(300px, 23vw, 352px);
+    --chat-rail-width: 56px;
+    --chat-space: 0px;
     width: 100%;
     min-height: 100vh;
     min-height: 100dvh;
-    margin: 0;
-    padding: 1.5rem clamp(0.75rem, 2vw, 2rem);
-    display: block;
 }
-.game-layout.with-chat {
-    --chat-dock-width: clamp(310px, 21vw, 370px);
+.game-layout.with-chat { --chat-space: var(--chat-width); }
+.game-layout.with-chat.chat-collapsed { --chat-space: var(--chat-rail-width); }
+.game-workspace {
+    width: calc(100% - var(--chat-space));
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 1.5rem clamp(0.75rem, 2.5vw, 2rem);
+    transition: width 180ms ease;
 }
 .game-layout .game-table {
     width: 100%;
     max-width: 960px;
-    min-width: 0;
-    padding: 0;
     margin: 0 auto;
+    padding: 0;
+    min-width: 0;
 }
-.game-layout.with-chat:not(.chat-collapsed) .game-table {
-    /* Leave symmetrical room for the dock and tab, keeping the table centered on wide screens. */
-    width: min(960px, calc(100vw - var(--chat-dock-width) - var(--chat-dock-width) - 110px));
-}
-.chat-panel {
+.chat-sidebar {
     position: fixed;
-    right: 0;
     top: 0;
     bottom: 0;
-    width: var(--chat-dock-width, 350px);
+    right: 0;
+    z-index: 100;
+    width: var(--chat-width);
     height: 100vh;
     height: 100dvh;
     min-width: 0;
-    min-height: 0;
-    padding: 1.1rem;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
     background: #173c24;
-    border-left: 1px solid rgba(255, 255, 255, 0.22);
+    color: #f0f0f0;
+    border: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 0;
-    box-shadow: -8px 0 22px rgba(0, 0, 0, 0.2);
-    z-index: 100;
-    transform: translateX(0);
-    transition: transform 220ms ease;
+    box-shadow: -5px 0 18px rgba(0, 0, 0, 0.11);
+    transition: width 180ms ease;
 }
-.chat-panel.is-collapsed { transform: translateX(100%); }
-.chat-dock-tab {
-    position: absolute;
-    left: -39px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 39px;
-    min-height: 56px;
-    padding: 0.5rem 0.3rem;
-    border-radius: 9px 0 0 9px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-right: 0;
-    background: #173c24;
-    box-shadow: -3px 2px 12px rgba(0, 0, 0, 0.17);
+.chat-sidebar.is-collapsed { width: var(--chat-rail-width); }
+.chat-sidebar-header {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 70px;
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.chat-sidebar-header h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    color: #fff;
+}
+.chat-sidebar.is-collapsed .chat-sidebar-header {
+    padding: 0.75rem 0;
+    justify-content: center;
+    border-bottom: 0;
+}
+.chat-collapse-button {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.065);
     color: #f5c518;
     cursor: pointer;
-    font-size: 1.6rem;
     line-height: 1;
+    transition: background 150ms ease, border-color 150ms ease;
+}
+.chat-collapse-button:hover {
+    background: rgba(245, 197, 24, 0.12);
+    border-color: rgba(245, 197, 24, 0.45);
+}
+.chat-collapse-button:focus-visible { outline: 3px solid #f5c518; outline-offset: 2px; }
+.chat-sidebar-content {
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.3rem;
-}
-.chat-dock-tab:hover { background: #214f30; }
-.chat-dock-tab:focus-visible { outline: 3px solid #f5c518; outline-offset: 2px; }
-.chat-panel.is-collapsed .chat-dock-tab { min-height: 88px; }
-.chat-dock-tab-label { writing-mode: vertical-rl; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; }
-.chat-dock-body {
-    height: 100%;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.9rem;
+    padding: 0 1rem 1rem;
 }
-.chat-panel-header {
-    flex-shrink: 0;
-    padding-bottom: 0.8rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
-}
-.chat-panel-header h2 { font-size: 1.2rem; margin-bottom: 0.25rem; }
-.chat-panel-header p { font-size: 0.8rem; color: #d4e1d6; }
 .chat-messages {
-    flex: 1;
+    flex: 1 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.55rem;
     overflow-y: auto;
     overflow-wrap: anywhere;
-    padding: 0.25rem 0.15rem;
     overscroll-behavior: contain;
+    padding: 1rem 0.1rem;
 }
 .chat-message {
-    line-height: 1.4;
-    padding: 0.55rem 0.7rem;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
+    margin: 0;
+    padding: 0.6rem 0.75rem;
+    border-radius: 9px;
+    line-height: 1.5;
+    font-size: 0.93rem;
+    background: rgba(255, 255, 255, 0.07);
 }
 .chat-message .chat-sender { font-weight: 700; }
-@media (max-width: 1150px) and (min-width: 701px) {
-    .game-layout.with-chat:not(.chat-collapsed) .game-table {
-        /* At smaller laptop widths, protect the playable table from becoming too narrow. */
-        width: min(960px, calc(100vw - var(--chat-dock-width) - 90px));
-        margin-left: 0;
-        margin-right: auto;
-    }
+@media (max-width: 860px) {
+    /* On small screens the sidebar overlays instead of compressing gameplay. */
+    .game-layout.with-chat .game-workspace { width: calc(100% - var(--chat-rail-width)); }
+    .chat-sidebar:not(.is-collapsed) { box-shadow: -12px 0 36px rgba(0, 0, 0, 0.25); }
 }
-@media (max-width: 700px) {
-    .game-layout.with-chat:not(.chat-collapsed) .game-table { width: 100%; margin: 0 auto; }
-    .chat-panel { width: min(370px, calc(100vw - 45px)); }
+@media (max-width: 480px) {
+    .game-layout { --chat-width: min(340px, calc(100vw - 52px)); }
+    .chat-sidebar-content { padding: 0 0.75rem 0.75rem; }
+    .chat-sidebar-header { padding: 0.75rem; }
 }
-@media (max-height: 560px) {
-    .chat-panel { padding: 0.75rem; }
-    .chat-dock-body { gap: 0.5rem; }
-    .chat-panel-header { padding-bottom: 0.5rem; }
-    .chat-form { gap: 0.35rem; }
+@media (max-height: 540px) {
+    .chat-sidebar-header { min-height: 54px; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+    .chat-sidebar-content { padding-bottom: 0.5rem; }
+    .chat-messages { padding-top: 0.5rem; padding-bottom: 0.5rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .chat-panel { transition: none; }
+    .chat-sidebar, .game-workspace, .chat-collapse-button { transition: none; }
 }
 .chat-message .chat-name-0 { color: #ffd166; }
 .chat-message .chat-name-1 { color: #8ad5ff; }
@@ -497,16 +508,25 @@ body {
 .chat-message .chat-name-9 { color: #ffcb90; }
 .chat-message .chat-name-10 { color: #a1eadf; }
 .chat-message .chat-name-11 { color: #e1b5ff; }
-.chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.6rem; margin-top: auto; }
-
-.chat-composer-meta {
-    grid-column: 1 / -1;
+.chat-form {
+    flex-shrink: 0;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin: 0;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
+.chat-composer-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    align-items: center;
+}
+.chat-composer-row .input { min-width: 0; width: 100%; }
+.chat-composer-row .btn { padding: 0.6rem 0.9rem; }
 .chat-character-count {
+    align-self: flex-end;
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
     color: #d4e1d6;
@@ -516,7 +536,7 @@ body {
     font-weight: 700;
 }
 .chat-limit-card {
-    grid-column: 1 / -1;
+    width: 100%;
     display: flex;
     align-items: flex-start;
     gap: 0.65rem;
@@ -536,8 +556,6 @@ body {
 .chat-limit-card strong { font-size: 0.92rem; }
 .chat-limit-card p { font-size: 0.82rem; margin-top: 0.15rem; color: #f7eac9; }
 
-.chat-form label { grid-column: 1 / -1; font-weight: 600; }
-.chat-form input { min-width: 0; }
 .spectator-list { text-align: center; color: #d4e1d6; font-size: 0.9rem; }
 .player-bet { font-size: 0.85rem; opacity: 0.7; margin-bottom: 0.3rem; }
 .hand-value { font-size: 0.85rem; margin-top: 0.3rem; }
