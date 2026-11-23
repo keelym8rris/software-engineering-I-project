@@ -186,6 +186,10 @@ public class BlackjackHub : Hub
     if (string.IsNullOrWhiteSpace(avatar))
         return null;
 
+    // Premade icons are stored as a short path from the approved list.
+    if (PremadeAvatars.IsPremade(avatar))
+        return avatar;
+
     if (avatar.Length > 2_100_000)
         return null;
 

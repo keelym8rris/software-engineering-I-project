@@ -263,9 +263,14 @@
         GameId = GameId.Trim().ToUpperInvariant();
 
         // Load the player's saved avatar.
-        _playerAvatar = await JS.InvokeAsync<string?>(
-            "localStorage.getItem",
-            "blackjack.playerAvatar");
+        try
+        {
+            _playerAvatar = await JS.InvokeAsync<string?>("blackjackAvatar.get");
+        }
+        catch (Exception ex) when (ex is JSException || ex is InvalidOperationException || ex is TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Could not load the saved player icon. Continuing without it.");
+        }
 
         
 

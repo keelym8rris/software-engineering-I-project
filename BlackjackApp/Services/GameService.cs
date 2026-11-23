@@ -57,23 +57,28 @@ public class GameService
         }
     }
 
-   public bool TryJoinGame(
-    string gameId,
-    string connectionId,
-    string name,
-    string? priorConnectionId,
-    string? playerAvatar,
-    out string error)
-{
-    lock (_sync)
-    {
-        error = "";
+    public const int MaxPlayers = 6;
 
-        if (!_games.TryGetValue(gameId, out var game))
+    public bool TryJoinGame(string gameId, string connectionId, string name, string? priorConnectionId, out string error) =>
+        TryJoinGame(gameId, connectionId, name, priorConnectionId, null, out error);
+
+    public bool TryJoinGame(
+        string gameId,
+        string connectionId,
+        string name,
+        string? priorConnectionId,
+        string? playerAvatar,
+        out string error)
+    {
+        lock (_sync)
         {
-            error = "No lobby found with that code. Check it and try again.";
-            return false;
-        }
+            error = "";
+
+            if (!_games.TryGetValue(gameId, out var game))
+            {
+                error = "No lobby found with that code. Check it and try again.";
+                return false;
+            }
 
             var returningPlayer = priorConnectionId == null
                 ? null
@@ -81,6 +86,7 @@ public class GameService
             var returningSpectator = priorConnectionId == null
                 ? null
                 : game.Spectators.FirstOrDefault(s => s.ConnectionId == priorConnectionId);
+
             if (returningSpectator != null)
             {
                 _connectionIndex.Remove(returningSpectator.ConnectionId);
@@ -97,28 +103,44 @@ public class GameService
                 if (game.ChatSenderColors.Remove(returningPlayer.ConnectionId, out var existingColor))
                     game.ChatSenderColors[connectionId] = existingColor;
                 returningPlayer.ConnectionId = connectionId;
+                if (!string.IsNullOrWhiteSpace(playerAvatar))
+                    returningPlayer.Avatar = playerAvatar;
                 _connectionIndex[connectionId] = gameId;
                 if (game.HostConnectionId == priorConnectionId)
                     game.HostConnectionId = connectionId;
                 return true;
             }
 
-            if (returningPlayer != null)
-                returningPlayer.ConnectionId = connectionId;
+            // A brand-new player.
+            if (game.Mode == GameMode.Solo)
+            {
+                error = "That table is a solo game and can't be joined.";
+                return false;
+            }
 
-            if (!string.IsNullOrWhiteSpace(playerAvatar))
-                returningPlayer.Avatar = playerAvatar;
+            if (game.Phase != GamePhase.Lobby)
+            {
+                error = "That game has already started. Ask the host to start a new table.";
+                return false;
+            }
 
+            if (game.Players.Count >= MaxPlayers)
+            {
+                error = "That lobby is full.";
+                return false;
+            }
+
+            game.Players.Add(new Player
+            {
+                ConnectionId = connectionId,
+                Name = name,
+                Avatar = string.IsNullOrWhiteSpace(playerAvatar) ? null : playerAvatar
+            });
             _connectionIndex[connectionId] = gameId;
-
-            if (game.HostConnectionId == priorConnectionId)
-                game.HostConnectionId = connectionId;
-
             return true;
         }
-}
+    }
 
-       
     public GameStateDto? GetGameState(string gameId)
     {
         lock (_sync)

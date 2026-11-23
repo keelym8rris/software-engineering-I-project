@@ -1,6 +1,7 @@
 
 @page "/player-name"
 @using Microsoft.AspNetCore.Components.Forms
+@using BlackjackApp.Models
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -58,8 +59,24 @@
 
                 <p class="muted">
                     Upload a PNG, JPG, WEBP, or GIF image.
-                    Maximum size: 1.5 MB.
+                    Maximum size: 5 MB. It is cropped to a small square.
                 </p>
+
+                <p class="muted">Or choose a premade icon:</p>
+
+                <div class="avatar-choices">
+                    @foreach (var option in PremadeAvatars.All)
+                    {
+                        <button type="button"
+                                class="avatar-choice @(_playerAvatar == option.Path ? "selected" : "")"
+                                title="@option.Label"
+                                aria-label="@option.Label"
+                                aria-pressed="@(_playerAvatar == option.Path ? "true" : "false")"
+                                @onclick="() => SelectPremadeAvatar(option.Path)">
+                            <img src="@option.Path" alt="" />
+                        </button>
+                    }
+                </div>
 
                 @if (!string.IsNullOrWhiteSpace(_playerAvatar))
                 {
@@ -89,7 +106,7 @@
     private const string PlayerNameStorageKey = "blackjack.playerName";
     private const string PlayerAvatarStorageKey = "blackjack.playerAvatar";
 
-    private const long MaxAvatarSize = 1_500_000;
+    private const long MaxAvatarSize = 5_000_000;
 
     private string _playerName = "";
     private string? _playerAvatar;
@@ -105,9 +122,14 @@
             "localStorage.getItem",
             PlayerNameStorageKey) ?? "";
 
-        _playerAvatar = await JS.InvokeAsync<string?>(
-            "localStorage.getItem",
-            PlayerAvatarStorageKey);
+        try
+        {
+            _playerAvatar = await JS.InvokeAsync<string?>("blackjackAvatar.get");
+        }
+        catch (Exception ex) when (ex is JSException || ex is InvalidOperationException || ex is TaskCanceledException)
+        {
+            _playerAvatar = null;
+        }
 
         _loaded = true;
 
@@ -136,27 +158,34 @@
 
         if (file.Size > MaxAvatarSize)
         {
-            _error = "Image must be smaller than 1.5 MB.";
+            _error = "Image must be smaller than 5 MB.";
             return;
         }
 
         try
         {
-            using var stream = file.OpenReadStream(MaxAvatarSize);
-            using var memoryStream = new MemoryStream();
+            // The browser shrinks the image to a small square, so only a few KB
+            // ever travel over the Blazor connection (it drops messages over 32 KB).
+            var resized = await JS.InvokeAsync<string?>("blackjackAvatar.fromInput", "avatar-upload");
 
-            await stream.CopyToAsync(memoryStream);
+            if (string.IsNullOrWhiteSpace(resized))
+            {
+                _error = "Could not use this image. Please try another.";
+                return;
+            }
 
-            var base64 = Convert.ToBase64String(
-                memoryStream.ToArray());
-
-            _playerAvatar =
-                $"data:{file.ContentType};base64,{base64}";
+            _playerAvatar = resized;
         }
         catch (Exception)
         {
             _error = "Could not upload this image. Please try another.";
         }
+    }
+
+    private void SelectPremadeAvatar(string path)
+    {
+        _playerAvatar = path;
+        _error = "";
     }
 
     private void RemoveAvatar()
