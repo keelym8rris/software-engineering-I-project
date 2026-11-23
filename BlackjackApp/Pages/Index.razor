@@ -238,10 +238,10 @@ else
             }
 
             await _hub.InvokeAsync(
-                "CreateGame",
-                _playerName,
-                _selectedMode.Value.ToString(),
-                playerAvatar);
+            "CreateGame",
+            _playerName,
+            _selectedMode.Value.ToString(),
+            null);
         }
         catch (Exception ex)
         {
