@@ -362,26 +362,71 @@ body {
 .balance-notice p { margin-bottom: 1rem; line-height: 1.5; }
 .balance-notice .btn { margin: 0.25rem; }
 
-.chat-panel {
-    width: 100%;
-    padding: 1.25rem;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 12px;
-    background: rgba(0, 0, 0, 0.25);
+/* Compact chat launcher and right-side drawer. */
+.chat-toggle {
+    margin-left: auto;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
-.chat-panel h2 { font-size: 1.15rem; margin-bottom: 0.8rem; }
-.chat-messages {
+.chat-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(3, 20, 9, 0.35);
+    z-index: 98;
+}
+.chat-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    height: 100dvh;
+    width: min(380px, 100vw);
+    z-index: 99;
+    padding: 1.25rem;
+    background: #173c24;
+    border-left: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.3);
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    min-height: 80px;
-    max-height: 210px;
+    gap: 1rem;
+    animation: chat-slide-in 0.2s ease-out;
+}
+.chat-drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+}
+.chat-drawer-header h2 { font-size: 1.2rem; margin-bottom: 0.25rem; }
+.chat-drawer-header p { font-size: 0.8rem; color: #d4e1d6; }
+.chat-close { padding: 0.35rem 0.7rem; font-size: 1.3rem; line-height: 1; }
+.chat-messages {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
     overflow-y: auto;
     overflow-wrap: anywhere;
-    padding: 0.5rem;
+    padding: 0.25rem 0.15rem;
+    overscroll-behavior: contain;
 }
-.chat-message { line-height: 1.4; }
+.chat-message {
+    line-height: 1.4;
+    padding: 0.55rem 0.7rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+}
 .chat-message .chat-sender { font-weight: 700; }
+@keyframes chat-slide-in {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .chat-drawer { animation: none; }
+}
 .chat-message .chat-name-0 { color: #ffd166; }
 .chat-message .chat-name-1 { color: #8ad5ff; }
 .chat-message .chat-name-2 { color: #ffa4ca; }
@@ -394,9 +439,9 @@ body {
 .chat-message .chat-name-9 { color: #ffcb90; }
 .chat-message .chat-name-10 { color: #a1eadf; }
 .chat-message .chat-name-11 { color: #e1b5ff; }
-.chat-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.75rem; }
-.chat-form label { width: 100%; font-weight: 600; }
-.chat-form input { flex: 1; min-width: 180px; }
+.chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.6rem; margin-top: auto; }
+.chat-form label { grid-column: 1 / -1; font-weight: 600; }
+.chat-form input { min-width: 0; }
 .spectator-list { text-align: center; color: #d4e1d6; font-size: 0.9rem; }
 .player-bet { font-size: 0.85rem; opacity: 0.7; margin-bottom: 0.3rem; }
 .hand-value { font-size: 0.85rem; margin-top: 0.3rem; }
