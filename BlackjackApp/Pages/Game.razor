@@ -3,8 +3,10 @@
 @using BlackjackApp.Services
 @using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.Extensions.Logging
+@using Microsoft.JSInterop
 @inject NavigationManager Nav
 @inject ILogger<Game> Logger
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 <div class="game-table">
@@ -34,6 +36,13 @@
             <span class="game-id">@_game.Mode Blackjack</span>
             <span class="phase-badge">@_game.Phase</span>
             <span class="message">@_game.Message</span>
+            @if (_game.Mode == "Multiplayer" && (Me != null || IsSpectator))
+            {
+                <button type="button" class="btn btn-secondary chat-toggle" @onclick="ToggleChat"
+                        aria-expanded="@_chatOpen" aria-controls="table-chat-drawer">
+                    @(_chatOpen ? "Close chat" : "Chat")
+                </button>
+            }
         </div>
 
         @if (_game.Phase == "Lobby" && _game.Mode == "Multiplayer")
@@ -178,11 +187,20 @@
             }
         </div>
 
-        @if (_game.Mode == "Multiplayer" && (Me != null || IsSpectator))
+        @if (_game.Mode == "Multiplayer" && (Me != null || IsSpectator) && _chatOpen)
         {
-            <section class="chat-panel" aria-labelledby="chat-heading">
-                <h2 id="chat-heading">Table chat</h2>
-                <div class="chat-messages" role="log" aria-live="polite" aria-relevant="additions">
+            <div class="chat-backdrop" @onclick="CloseChat" aria-hidden="true"></div>
+            <aside id="table-chat-drawer" class="chat-drawer" aria-labelledby="chat-heading">
+                <div class="chat-drawer-header">
+                    <div>
+                        <h2 id="chat-heading">Table chat</h2>
+                        <p>Talk with players and spectators</p>
+                    </div>
+                    <button type="button" class="btn btn-secondary chat-close" @onclick="CloseChat"
+                            aria-label="Close chat">×</button>
+                </div>
+                <div class="chat-messages" @ref="_chatMessagesElement" role="log"
+                     aria-live="polite" aria-relevant="additions">
                     @if (_game.ChatMessages.Count == 0)
                     {
                         <p class="muted">No messages yet. Say hello!</p>
@@ -194,11 +212,12 @@
                 </div>
                 <form class="chat-form" @onsubmit="SendChat" @onsubmit:preventDefault>
                     <label for="chat-input">Message</label>
-                    <input id="chat-input" class="input" @bind="_chatText" @bind:event="oninput" maxlength="200"
-                           autocomplete="off" placeholder="Message your table..." />
-                    <button type="submit" class="btn btn-primary" disabled="@string.IsNullOrWhiteSpace(_chatText)">Send</button>
+                    <input id="chat-input" class="input" @bind="_chatText" @bind:event="oninput"
+                           maxlength="200" autocomplete="off" placeholder="Message your table..." />
+                    <button type="submit" class="btn btn-primary"
+                            disabled="@string.IsNullOrWhiteSpace(_chatText)">Send</button>
                 </form>
-            </section>
+            </aside>
         }
         @if (_game.Mode == "Multiplayer" && _game.Spectators.Count > 0)
         {
@@ -220,12 +239,33 @@
     private bool _joining;
     private int _betAmount = 10;
     private string _chatText = "";
+    private bool _chatOpen;
+    private bool _pendingChatScroll;
+    private string _lastChatSnapshot = "";
+    private ElementReference _chatMessagesElement;
+    private IJSObjectReference? _chatScrollModule;
     private PlayerDto? Me => _game?.Players.FirstOrDefault(p => p.ConnectionId == _myConnectionId);
     private bool IsSpectator => _game?.Spectators.Any(s => s.ConnectionId == _myConnectionId) == true;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        if (!firstRender)
+        {
+            if (_chatOpen && _pendingChatScroll)
+            {
+                try
+                {
+                    _chatScrollModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/chat.js");
+                    await _chatScrollModule.InvokeVoidAsync("scrollToLatest", _chatMessagesElement);
+                    _pendingChatScroll = false;
+                }
+                catch (JSException ex)
+                {
+                    Logger.LogDebug(ex, "Could not scroll the chat panel");
+                }
+            }
+            return;
+        }
 
         GameId = GameId.Trim().ToUpperInvariant();
 
@@ -306,6 +346,14 @@
     private async Task NewRound() => await SendHubRequestAsync("NewRound", GameId);
     private void LeaveGame() => Nav.NavigateTo("/");
     private async Task Spectate() => await SendHubRequestAsync("Spectate", GameId);
+    private void ToggleChat()
+    {
+        _chatOpen = !_chatOpen;
+        if (_chatOpen) _pendingChatScroll = true;
+    }
+
+    private void CloseChat() => _chatOpen = false;
+
     private async Task SendChat()
     {
         var message = _chatText.Trim();
@@ -316,6 +364,15 @@
 
     private void UpdateGameState(GameStateDto state) => _ = InvokeAsync(() =>
     {
+        // Don't jump when a card is played; scroll only when chat changes.
+        var chatSnapshot = string.Join("\u001f", state.ChatMessages.Select(m =>
+            $"{m.Sender}\u001e{m.ColorIndex}\u001e{m.Text}"));
+        if (!string.Equals(chatSnapshot, _lastChatSnapshot, StringComparison.Ordinal))
+        {
+            _lastChatSnapshot = chatSnapshot;
+            _pendingChatScroll = true;
+        }
+
         _game = state;
         StateHasChanged();
     });
@@ -344,6 +401,12 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (_chatScrollModule != null)
+        {
+            try { await _chatScrollModule.DisposeAsync(); }
+            catch (JSException ex) { Logger.LogDebug(ex, "Could not dispose chat scroll module"); }
+        }
+
         if (_hub == null) return;
         try { await _hub.DisposeAsync(); }
         catch (Exception ex) { Logger.LogDebug(ex, "Error disposing the connection for game {GameId}", GameId); }
