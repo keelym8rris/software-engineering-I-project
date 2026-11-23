@@ -3,12 +3,15 @@
 @using BlackjackApp.Services
 @using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.Extensions.Logging
+@using Microsoft.JSInterop
 @inject NavigationManager Nav
-@inject IJSRuntime JS
 @inject ILogger<Game> Logger
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="game-table">
+<div class="game-layout @(CanUseChat ? "with-chat" : "") @(_chatCollapsed ? "chat-collapsed" : "")">
+    <div class="game-workspace">
+        <div class="game-table">
     @if (!string.IsNullOrWhiteSpace(_error))
     {
         <p class="error" role="alert">@_error</p>
@@ -76,41 +79,24 @@
                 bool isMe = player.ConnectionId == _myConnectionId;
                 bool isActive = _game.CurrentPlayerConnectionId == player.ConnectionId;
                 <div class="player-seat @(isMe ? "me" : "") @(isActive ? "active" : "")">
-
-    <div class="player-profile">
-
-        @if (!string.IsNullOrWhiteSpace(player.Avatar))
-        {
-            <img src="@player.Avatar"
-                 class="player-avatar"
-                 alt="Player avatar" />
-        }
-        else
-        {
-            <div class="player-avatar-placeholder">
-                @(string.IsNullOrWhiteSpace(player.Name)
-                    ? "?"
-                    : player.Name[..1].ToUpperInvariant())
-            </div>
-        }
-
-        <div class="player-name">
-            @player.Name
-
-            @if (isMe)
-            {
-                <span class="you-badge">You</span>
-            }
-
-            @if (player.ConnectionId == _game.HostConnectionId)
-            {
-                <span class="host-badge">Host</span>
-            }
-        </div>
-
-    </div>
-
-    <div class="player-chips">@player.Chips.ToString("N1") chips</div>
+                    <div class="player-profile">
+                        @if (!string.IsNullOrWhiteSpace(player.Avatar))
+                        {
+                            <img src="@player.Avatar" class="player-avatar"
+                                 alt="@($"{player.Name}'s player icon")" />
+                        }
+                        else
+                        {
+                            <div class="player-avatar-placeholder" aria-hidden="true">
+                                @(string.IsNullOrWhiteSpace(player.Name) ? "?" : player.Name[..1].ToUpperInvariant())
+                            </div>
+                        }
+                        <div class="player-name">
+                            @player.Name
+                            @if (isMe) { <span class="you-badge">You</span> }
+                            @if (player.ConnectionId == _game.HostConnectionId) { <span class="host-badge">Host</span> }
+                        </div>
+                    </div>
                     <div class="player-chips">@player.Chips.ToString("N1") chips</div>
                     <div class="player-bet">Bet: @player.CurrentBet</div>
                     <div class="hand">
@@ -209,70 +195,122 @@
             }
         </div>
 
-        @if (_game.Mode == "Multiplayer" && (Me != null || IsSpectator))
-        {
-            <section class="chat-panel" aria-labelledby="chat-heading">
-                <h2 id="chat-heading">Table chat</h2>
-                <div class="chat-messages" role="log" aria-live="polite" aria-relevant="additions">
-                    @if (_game.ChatMessages.Count == 0)
-                    {
-                        <p class="muted">No messages yet. Say hello!</p>
-                    }
-                    @foreach (var message in _game.ChatMessages)
-                    {
-                        <p class="chat-message"><strong class="chat-sender chat-name-@(message.ColorIndex)">@message.Sender:</strong> @message.Text</p>
-                    }
-                </div>
-                <form class="chat-form" @onsubmit="SendChat" @onsubmit:preventDefault>
-                    <label for="chat-input">Message</label>
-                    <input id="chat-input" class="input" @bind="_chatText" @bind:event="oninput" maxlength="200"
-                           autocomplete="off" placeholder="Message your table..." />
-                    <button type="submit" class="btn btn-primary" disabled="@string.IsNullOrWhiteSpace(_chatText)">Send</button>
-                </form>
-            </section>
-        }
         @if (_game.Mode == "Multiplayer" && _game.Spectators.Count > 0)
         {
             <p class="spectator-list">Spectating: @string.Join(", ", _game.Spectators.Select(s => s.Name))</p>
         }
+    }
+        </div>
+    </div>
+    @if (_game != null && CanUseChat)
+    {
+        <aside id="game-chat-sidebar" class="chat-sidebar @(_chatCollapsed ? "is-collapsed" : "")" aria-label="Chat">
+            <div class="chat-sidebar-header">
+                @if (!_chatCollapsed)
+                {
+                    <h2 id="chat-heading">Chat</h2>
+                }
+                <button type="button" class="chat-collapse-button" @onclick="ToggleChatCollapsed"
+                        aria-label="@(_chatCollapsed ? "Expand chat" : "Collapse chat")"
+                        aria-expanded="@(!_chatCollapsed)" title="@(_chatCollapsed ? "Expand chat" : "Collapse chat")">
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none"
+                         stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                        <path d="M10 4v16"></path>
+                        <path d="@(_chatCollapsed ? "M14 9l3 3-3 3" : "M18 9l-3 3 3 3")"></path>
+                    </svg>
+                </button>
+            </div>
+            @if (!_chatCollapsed)
+            {
+                <div id="chat-sidebar-content" class="chat-sidebar-content">
+                    <div class="chat-messages" @ref="_chatMessagesElement" role="log"
+                         aria-live="polite" aria-relevant="additions" aria-label="Messages">
+                        @foreach (var message in _game.ChatMessages)
+                        {
+                            <p class="chat-message"><strong class="chat-sender chat-name-@(message.ColorIndex)">@message.Sender:</strong> @message.Text</p>
+                        }
+                    </div>
+                    <form class="chat-form" @onsubmit="SendChat" @onsubmit:preventDefault>
+                        @if (!string.IsNullOrWhiteSpace(_chatNotice) || _chatText.Length >= GameService.MaxChatLength)
+                        {
+                            <div class="chat-limit-card" role="status" aria-live="polite">
+                                <span class="chat-limit-icon" aria-hidden="true">♥</span>
+                                <div>
+                                    <strong>@(string.IsNullOrWhiteSpace(_chatNotice) ? "Message limit reached!" : "Quick chat tip!")</strong>
+                                    <p>@(_chatNotice ?? "That is 200 characters! Send your message or shorten it to keep typing.")</p>
+                                </div>
+                            </div>
+                        }
+                        <div class="chat-composer-row">
+                            <input id="chat-input" class="input" @bind="_chatText" @bind:event="oninput"
+                                   @bind:after="ClearChatNotice" maxlength="@GameService.MaxChatLength"
+                                   aria-label="Chat message" autocomplete="off" placeholder="Message..." />
+                            <button type="submit" class="btn btn-primary"
+                                    disabled="@string.IsNullOrWhiteSpace(_chatText)">Send</button>
+                        </div>
+                    </form>
+                </div>
+            }
+        </aside>
     }
 </div>
 
 @code {
     [Parameter] public string GameId { get; set; } = "";
     [SupplyParameterFromQuery(Name = "name")] public string PlayerName { get; set; } = "Player";
-    
     [SupplyParameterFromQuery(Name = "connId")] public string? PriorConnectionId { get; set; }
 
     private HubConnection? _hub;
     private GameStateDto? _game;
     private string _myConnectionId = "";
+    private string? _playerAvatar;
     private string _error = "";
     private string _connectionStatus = "";
-    private string? _playerAvatar;
     private bool _joining;
     private int _betAmount = 10;
     private string _chatText = "";
+    private string? _chatNotice;
+    private bool _chatCollapsed;
+    private bool _pendingChatScroll;
+    private string _lastChatSnapshot = "";
+    private ElementReference _chatMessagesElement;
+    private IJSObjectReference? _chatScrollModule;
     private PlayerDto? Me => _game?.Players.FirstOrDefault(p => p.ConnectionId == _myConnectionId);
     private bool IsSpectator => _game?.Spectators.Any(s => s.ConnectionId == _myConnectionId) == true;
+    private bool CanUseChat => _game?.Mode == "Multiplayer" && (Me != null || IsSpectator);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        if (!firstRender)
+        {
+            if (CanUseChat && !_chatCollapsed && _pendingChatScroll)
+            {
+                try
+                {
+                    _chatScrollModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/chat.js");
+                    await _chatScrollModule.InvokeVoidAsync("scrollToLatest", _chatMessagesElement);
+                    _pendingChatScroll = false;
+                }
+                catch (JSException ex)
+                {
+                    Logger.LogDebug(ex, "Could not scroll the chat panel");
+                }
+            }
+            return;
+        }
 
         GameId = GameId.Trim().ToUpperInvariant();
 
-        // Load the player's saved avatar.
+        // Restore the icon selected on the Player Settings page.
         try
         {
             _playerAvatar = await JS.InvokeAsync<string?>("blackjackAvatar.get");
         }
         catch (Exception ex) when (ex is JSException || ex is InvalidOperationException || ex is TaskCanceledException)
         {
-            Logger.LogWarning(ex, "Could not load the saved player icon. Continuing without it.");
+            Logger.LogWarning(ex, "Could not load the saved player icon; joining without one.");
         }
-
-        
 
         try
         {
@@ -351,16 +389,41 @@
     private async Task NewRound() => await SendHubRequestAsync("NewRound", GameId);
     private void LeaveGame() => Nav.NavigateTo("/");
     private async Task Spectate() => await SendHubRequestAsync("Spectate", GameId);
+    private void ToggleChatCollapsed()
+    {
+        _chatCollapsed = !_chatCollapsed;
+        if (!_chatCollapsed)
+            _pendingChatScroll = true;
+    }
+
+    private void ClearChatNotice() => _chatNotice = null;
+
     private async Task SendChat()
     {
         var message = _chatText.Trim();
         if (message.Length == 0) return;
+        if (message.Length > GameService.MaxChatLength || message.Any(char.IsControl))
+        {
+            _chatNotice = "Please keep messages under 200 characters and avoid control characters.";
+            return;
+        }
+
+        _chatNotice = null;
         await SendHubRequestAsync("SendChat", GameId, message);
         _chatText = "";
     }
 
     private void UpdateGameState(GameStateDto state) => _ = InvokeAsync(() =>
     {
+        // Don't jump when a card is played; scroll only when chat changes.
+        var chatSnapshot = string.Join("\u001f", state.ChatMessages.Select(m =>
+            $"{m.Sender}\u001e{m.ColorIndex}\u001e{m.Text}"));
+        if (!string.Equals(chatSnapshot, _lastChatSnapshot, StringComparison.Ordinal))
+        {
+            _lastChatSnapshot = chatSnapshot;
+            _pendingChatScroll = true;
+        }
+
         _game = state;
         StateHasChanged();
     });
@@ -383,12 +446,26 @@
             _connectionStatus = "";
         }
 
+        if (message.StartsWith("Enter a message between 1 and 200", StringComparison.OrdinalIgnoreCase))
+        {
+            // Keep chat validation next to the composer instead of at the top of the table.
+            _chatNotice = "Keep messages within 200 characters and avoid unsupported characters.";
+            StateHasChanged();
+            return;
+        }
+
         _error = message;
         StateHasChanged();
     });
 
     public async ValueTask DisposeAsync()
     {
+        if (_chatScrollModule != null)
+        {
+            try { await _chatScrollModule.DisposeAsync(); }
+            catch (JSException ex) { Logger.LogDebug(ex, "Could not dispose chat scroll module"); }
+        }
+
         if (_hub == null) return;
         try { await _hub.DisposeAsync(); }
         catch (Exception ex) { Logger.LogDebug(ex, "Error disposing the connection for game {GameId}", GameId); }
