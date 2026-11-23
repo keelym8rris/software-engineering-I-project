@@ -362,45 +362,85 @@ body {
 .balance-notice p { margin-bottom: 1rem; line-height: 1.5; }
 .balance-notice .btn { margin: 0.25rem; }
 
-/* Persistent two-column game layout: play on the left, chat on the right. */
+/* Edge-docked multiplayer chat: the game stays centered independently. */
 .game-layout {
     width: 100%;
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 1.5rem clamp(0.75rem, 2vw, 1.5rem);
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-    gap: 1.25rem;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0;
+    padding: 1.5rem clamp(0.75rem, 2vw, 2rem);
+    display: block;
 }
 .game-layout.with-chat {
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+    --chat-dock-width: clamp(310px, 21vw, 370px);
 }
 .game-layout .game-table {
     width: 100%;
-    max-width: none;
+    max-width: 960px;
     min-width: 0;
-    margin: 0;
     padding: 0;
+    margin: 0 auto;
+}
+.game-layout.with-chat:not(.chat-collapsed) .game-table {
+    /* Leave symmetrical room for the dock and tab, keeping the table centered on wide screens. */
+    width: min(960px, calc(100vw - var(--chat-dock-width) - var(--chat-dock-width) - 110px));
 }
 .chat-panel {
-    position: sticky;
-    top: 1rem;
-    height: min(720px, calc(100vh - 2rem));
-    height: min(720px, calc(100dvh - 2rem));
-    min-height: 340px;
-    width: 100%;
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--chat-dock-width, 350px);
+    height: 100vh;
+    height: 100dvh;
     min-width: 0;
+    min-height: 0;
     padding: 1.1rem;
     background: #173c24;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 12px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.16);
+    border-left: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 0;
+    box-shadow: -8px 0 22px rgba(0, 0, 0, 0.2);
+    z-index: 100;
+    transform: translateX(0);
+    transition: transform 220ms ease;
+}
+.chat-panel.is-collapsed { transform: translateX(100%); }
+.chat-dock-tab {
+    position: absolute;
+    left: -39px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 39px;
+    min-height: 56px;
+    padding: 0.5rem 0.3rem;
+    border-radius: 9px 0 0 9px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-right: 0;
+    background: #173c24;
+    box-shadow: -3px 2px 12px rgba(0, 0, 0, 0.17);
+    color: #f5c518;
+    cursor: pointer;
+    font-size: 1.6rem;
+    line-height: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+}
+.chat-dock-tab:hover { background: #214f30; }
+.chat-dock-tab:focus-visible { outline: 3px solid #f5c518; outline-offset: 2px; }
+.chat-panel.is-collapsed .chat-dock-tab { min-height: 88px; }
+.chat-dock-tab-label { writing-mode: vertical-rl; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; }
+.chat-dock-body {
+    height: 100%;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
 }
 .chat-panel-header {
+    flex-shrink: 0;
     padding-bottom: 0.8rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.16);
 }
@@ -424,13 +464,26 @@ body {
     background: rgba(255, 255, 255, 0.06);
 }
 .chat-message .chat-sender { font-weight: 700; }
-@media (max-width: 900px) {
-    .game-layout.with-chat { grid-template-columns: minmax(0, 1fr); }
-    .chat-panel {
-        position: static;
-        height: 440px;
-        min-height: 0;
+@media (max-width: 1150px) and (min-width: 701px) {
+    .game-layout.with-chat:not(.chat-collapsed) .game-table {
+        /* At smaller laptop widths, protect the playable table from becoming too narrow. */
+        width: min(960px, calc(100vw - var(--chat-dock-width) - 90px));
+        margin-left: 0;
+        margin-right: auto;
     }
+}
+@media (max-width: 700px) {
+    .game-layout.with-chat:not(.chat-collapsed) .game-table { width: 100%; margin: 0 auto; }
+    .chat-panel { width: min(370px, calc(100vw - 45px)); }
+}
+@media (max-height: 560px) {
+    .chat-panel { padding: 0.75rem; }
+    .chat-dock-body { gap: 0.5rem; }
+    .chat-panel-header { padding-bottom: 0.5rem; }
+    .chat-form { gap: 0.35rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .chat-panel { transition: none; }
 }
 .chat-message .chat-name-0 { color: #ffd166; }
 .chat-message .chat-name-1 { color: #8ad5ff; }
