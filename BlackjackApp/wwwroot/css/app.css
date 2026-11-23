@@ -440,6 +440,44 @@ body {
 .chat-message .chat-name-10 { color: #a1eadf; }
 .chat-message .chat-name-11 { color: #e1b5ff; }
 .chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.6rem; margin-top: auto; }
+
+.chat-composer-meta {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.chat-character-count {
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    color: #d4e1d6;
+}
+.chat-character-count.is-full {
+    color: #f5c518;
+    font-weight: 700;
+}
+.chat-limit-card {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid rgba(245, 197, 24, 0.48);
+    border-radius: 10px;
+    background: rgba(245, 197, 24, 0.12);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+    color: #fff4c7;
+    line-height: 1.4;
+}
+.chat-limit-icon {
+    color: #f5c518;
+    font-size: 1.1rem;
+    line-height: 1.2;
+}
+.chat-limit-card strong { font-size: 0.92rem; }
+.chat-limit-card p { font-size: 0.82rem; margin-top: 0.15rem; color: #f7eac9; }
+
 .chat-form label { grid-column: 1 / -1; font-weight: 600; }
 .chat-form input { min-width: 0; }
 .spectator-list { text-align: center; color: #d4e1d6; font-size: 0.9rem; }
