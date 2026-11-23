@@ -211,9 +211,25 @@
                     }
                 </div>
                 <form class="chat-form" @onsubmit="SendChat" @onsubmit:preventDefault>
-                    <label for="chat-input">Message</label>
+                    <div class="chat-composer-meta">
+                        <label for="chat-input">Message</label>
+                        <span id="chat-character-count" class="chat-character-count @(_chatText.Length >= GameService.MaxChatLength ? "is-full" : "")">
+                            @($"{_chatText.Length}/{GameService.MaxChatLength}")
+                        </span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_chatNotice) || _chatText.Length >= GameService.MaxChatLength)
+                    {
+                        <div class="chat-limit-card" role="status" aria-live="polite">
+                            <span class="chat-limit-icon" aria-hidden="true">♥</span>
+                            <div>
+                                <strong>@(string.IsNullOrWhiteSpace(_chatNotice) ? "Message limit reached!" : "Quick chat tip!")</strong>
+                                <p>@(_chatNotice ?? "That's 200 characters! Send your message or shorten it to keep typing.")</p>
+                            </div>
+                        </div>
+                    }
                     <input id="chat-input" class="input" @bind="_chatText" @bind:event="oninput"
-                           maxlength="200" autocomplete="off" placeholder="Message your table..." />
+                           @bind:after="ClearChatNotice" maxlength="@GameService.MaxChatLength"
+                           aria-describedby="chat-character-count" autocomplete="off" placeholder="Message your table..." />
                     <button type="submit" class="btn btn-primary"
                             disabled="@string.IsNullOrWhiteSpace(_chatText)">Send</button>
                 </form>
@@ -239,6 +255,7 @@
     private bool _joining;
     private int _betAmount = 10;
     private string _chatText = "";
+    private string? _chatNotice;
     private bool _chatOpen;
     private bool _pendingChatScroll;
     private string _lastChatSnapshot = "";
@@ -353,11 +370,19 @@
     }
 
     private void CloseChat() => _chatOpen = false;
+    private void ClearChatNotice() => _chatNotice = null;
 
     private async Task SendChat()
     {
         var message = _chatText.Trim();
         if (message.Length == 0) return;
+        if (message.Length > GameService.MaxChatLength || message.Any(char.IsControl))
+        {
+            _chatNotice = "Please keep messages under 200 characters and avoid control characters.";
+            return;
+        }
+
+        _chatNotice = null;
         await SendHubRequestAsync("SendChat", GameId, message);
         _chatText = "";
     }
@@ -393,6 +418,15 @@
             _joining = false;
             _game = null;
             _connectionStatus = "";
+        }
+
+        if (message.StartsWith("Enter a message between 1 and 200 characters", StringComparison.OrdinalIgnoreCase))
+        {
+            // Keep chat validation next to the composer instead of at the top of the table.
+            _chatNotice = "Your message needs to be 1–200 characters, without control characters.";
+            _chatOpen = true;
+            StateHasChanged();
+            return;
         }
 
         _error = message;
