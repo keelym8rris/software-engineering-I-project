@@ -9,7 +9,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="game-layout @(CanUseChat ? "with-chat" : "")">
+<div class="game-layout @(CanUseChat ? "with-chat" : "") @(_chatCollapsed ? "chat-collapsed" : "")">
     <div class="game-table">
     @if (!string.IsNullOrWhiteSpace(_error))
     {
@@ -187,15 +187,26 @@
         }
     }
     </div>
-    @if (_game != null && CanUseChat)
-        {
-        <aside class="chat-panel" aria-labelledby="chat-heading">
-            <div class="chat-panel-header">
-                    <div>
+    @if (CanUseChat)
+    {
+        <aside class="chat-panel @(_chatCollapsed ? "is-collapsed" : "")" aria-label="Table chat">
+            <button type="button" class="chat-dock-tab" @onclick="ToggleChatCollapsed"
+                    aria-expanded="@(!_chatCollapsed)" aria-controls="table-chat-content"
+                    aria-label="@(_chatCollapsed ? "Expand table chat" : "Collapse table chat")"
+                    title="@(_chatCollapsed ? "Open chat" : "Collapse chat")">
+                <span aria-hidden="true">@(_chatCollapsed ? "‹" : "›")</span>
+                @if (_chatCollapsed)
+                {
+                    <span class="chat-dock-tab-label" aria-hidden="true">Chat</span>
+                }
+            </button>
+            @if (!_chatCollapsed)
+            {
+                <div id="table-chat-content" class="chat-dock-body">
+                    <div class="chat-panel-header">
                         <h2 id="chat-heading">Table chat</h2>
                         <p>Talk with players and spectators</p>
                     </div>
-                </div>
                 <div class="chat-messages" @ref="_chatMessagesElement" role="log"
                      aria-live="polite" aria-relevant="additions">
                     @if (_game.ChatMessages.Count == 0)
@@ -230,6 +241,8 @@
                     <button type="submit" class="btn btn-primary"
                             disabled="@string.IsNullOrWhiteSpace(_chatText)">Send</button>
                 </form>
+                </div>
+            }
         </aside>
     }
 </div>
@@ -248,6 +261,7 @@
     private int _betAmount = 10;
     private string _chatText = "";
     private string? _chatNotice;
+    private bool _chatCollapsed;
     private bool _pendingChatScroll;
     private string _lastChatSnapshot = "";
     private ElementReference _chatMessagesElement;
@@ -260,7 +274,7 @@
     {
         if (!firstRender)
         {
-            if (CanUseChat && _pendingChatScroll)
+            if (CanUseChat && !_chatCollapsed && _pendingChatScroll)
             {
                 try
                 {
@@ -355,6 +369,13 @@
     private async Task NewRound() => await SendHubRequestAsync("NewRound", GameId);
     private void LeaveGame() => Nav.NavigateTo("/");
     private async Task Spectate() => await SendHubRequestAsync("Spectate", GameId);
+    private void ToggleChatCollapsed()
+    {
+        _chatCollapsed = !_chatCollapsed;
+        if (!_chatCollapsed)
+            _pendingChatScroll = true;
+    }
+
     private void ClearChatNotice() => _chatNotice = null;
 
     private async Task SendChat()
