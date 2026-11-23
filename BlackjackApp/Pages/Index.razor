@@ -220,7 +220,26 @@ else
         {
             _playerName = _playerName.Trim();
             await JS.InvokeVoidAsync("localStorage.setItem", PlayerNameStorageKey, _playerName);
-            await _hub.InvokeAsync("CreateGame", _playerName, _selectedMode.Value.ToString());
+            
+           string? playerAvatar = null;
+
+            try
+            {
+                playerAvatar = await JS.InvokeAsync<string?>("blackjackAvatar.get");
+            }
+            catch (Exception ex) when (
+                ex is JSException ||
+                ex is TaskCanceledException ||
+                ex is InvalidOperationException)
+            {
+                Logger.LogWarning(ex, "Could not retrieve player avatar. Continuing without avatar.");
+            }
+
+            await _hub.InvokeAsync(
+                "CreateGame",
+                _playerName,
+                _selectedMode.Value.ToString(),
+                playerAvatar);
         }
         catch (Exception ex)
         {
