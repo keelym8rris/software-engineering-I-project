@@ -525,22 +525,13 @@ body {
 }
 .chat-composer-row .input { min-width: 0; width: 100%; }
 .chat-composer-row .btn { padding: 0.6rem 0.9rem; }
-.chat-character-count {
-    align-self: flex-end;
-    font-size: 0.78rem;
-    font-variant-numeric: tabular-nums;
-    color: #d4e1d6;
-}
-.chat-character-count.is-full {
-    color: #f5c518;
-    font-weight: 700;
-}
 .chat-limit-card {
     width: 100%;
+    margin-bottom: 0.65rem;
     display: flex;
     align-items: flex-start;
     gap: 0.65rem;
-    padding: 0.75rem 0.85rem;
+    padding: 0.85rem 0.9rem 1rem;
     border: 1px solid rgba(245, 197, 24, 0.48);
     border-radius: 10px;
     background: rgba(245, 197, 24, 0.12);
