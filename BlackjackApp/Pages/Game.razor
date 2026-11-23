@@ -9,7 +9,8 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="game-table">
+<div class="game-layout @(CanUseChat ? "with-chat" : "")">
+    <div class="game-table">
     @if (!string.IsNullOrWhiteSpace(_error))
     {
         <p class="error" role="alert">@_error</p>
@@ -36,13 +37,6 @@
             <span class="game-id">@_game.Mode Blackjack</span>
             <span class="phase-badge">@_game.Phase</span>
             <span class="message">@_game.Message</span>
-            @if (_game.Mode == "Multiplayer" && (Me != null || IsSpectator))
-            {
-                <button type="button" class="btn btn-secondary chat-toggle" @onclick="ToggleChat"
-                        aria-expanded="@_chatOpen" aria-controls="table-chat-drawer">
-                    @(_chatOpen ? "Close chat" : "Chat")
-                </button>
-            }
         </div>
 
         @if (_game.Phase == "Lobby" && _game.Mode == "Multiplayer")
@@ -187,17 +181,20 @@
             }
         </div>
 
-        @if (_game.Mode == "Multiplayer" && (Me != null || IsSpectator) && _chatOpen)
+        @if (_game.Mode == "Multiplayer" && _game.Spectators.Count > 0)
         {
-            <div class="chat-backdrop" @onclick="CloseChat" aria-hidden="true"></div>
-            <aside id="table-chat-drawer" class="chat-drawer" aria-labelledby="chat-heading">
-                <div class="chat-drawer-header">
+            <p class="spectator-list">Spectating: @string.Join(", ", _game.Spectators.Select(s => s.Name))</p>
+        }
+    }
+    </div>
+    @if (_game != null && CanUseChat)
+        {
+        <aside class="chat-panel" aria-labelledby="chat-heading">
+            <div class="chat-panel-header">
                     <div>
                         <h2 id="chat-heading">Table chat</h2>
                         <p>Talk with players and spectators</p>
                     </div>
-                    <button type="button" class="btn btn-secondary chat-close" @onclick="CloseChat"
-                            aria-label="Close chat">×</button>
                 </div>
                 <div class="chat-messages" @ref="_chatMessagesElement" role="log"
                      aria-live="polite" aria-relevant="additions">
@@ -233,12 +230,7 @@
                     <button type="submit" class="btn btn-primary"
                             disabled="@string.IsNullOrWhiteSpace(_chatText)">Send</button>
                 </form>
-            </aside>
-        }
-        @if (_game.Mode == "Multiplayer" && _game.Spectators.Count > 0)
-        {
-            <p class="spectator-list">Spectating: @string.Join(", ", _game.Spectators.Select(s => s.Name))</p>
-        }
+        </aside>
     }
 </div>
 
@@ -256,19 +248,19 @@
     private int _betAmount = 10;
     private string _chatText = "";
     private string? _chatNotice;
-    private bool _chatOpen;
     private bool _pendingChatScroll;
     private string _lastChatSnapshot = "";
     private ElementReference _chatMessagesElement;
     private IJSObjectReference? _chatScrollModule;
     private PlayerDto? Me => _game?.Players.FirstOrDefault(p => p.ConnectionId == _myConnectionId);
     private bool IsSpectator => _game?.Spectators.Any(s => s.ConnectionId == _myConnectionId) == true;
+    private bool CanUseChat => _game?.Mode == "Multiplayer" && (Me != null || IsSpectator);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
         {
-            if (_chatOpen && _pendingChatScroll)
+            if (CanUseChat && _pendingChatScroll)
             {
                 try
                 {
@@ -363,13 +355,6 @@
     private async Task NewRound() => await SendHubRequestAsync("NewRound", GameId);
     private void LeaveGame() => Nav.NavigateTo("/");
     private async Task Spectate() => await SendHubRequestAsync("Spectate", GameId);
-    private void ToggleChat()
-    {
-        _chatOpen = !_chatOpen;
-        if (_chatOpen) _pendingChatScroll = true;
-    }
-
-    private void CloseChat() => _chatOpen = false;
     private void ClearChatNotice() => _chatNotice = null;
 
     private async Task SendChat()
@@ -424,7 +409,6 @@
         {
             // Keep chat validation next to the composer instead of at the top of the table.
             _chatNotice = "Your message needs to be 1–200 characters, without control characters.";
-            _chatOpen = true;
             StateHasChanged();
             return;
         }
