@@ -10,7 +10,8 @@
 @implements IAsyncDisposable
 
 <div class="game-layout @(CanUseChat ? "with-chat" : "") @(_chatCollapsed ? "chat-collapsed" : "")">
-    <div class="game-table">
+    <div class="game-workspace">
+        <div class="game-table">
     @if (!string.IsNullOrWhiteSpace(_error))
     {
         <p class="error" role="alert">@_error</p>
@@ -186,61 +187,62 @@
             <p class="spectator-list">Spectating: @string.Join(", ", _game.Spectators.Select(s => s.Name))</p>
         }
     }
+        </div>
     </div>
     @if (_game != null && CanUseChat)
     {
-        <aside class="chat-panel @(_chatCollapsed ? "is-collapsed" : "")" aria-label="Table chat">
-            <button type="button" class="chat-dock-tab" @onclick="ToggleChatCollapsed"
-                    aria-expanded="@(!_chatCollapsed)"
-                    aria-label="@(_chatCollapsed ? "Expand table chat" : "Collapse table chat")"
-                    title="@(_chatCollapsed ? "Open chat" : "Collapse chat")">
-                <span aria-hidden="true">@(_chatCollapsed ? "‹" : "›")</span>
-                @if (_chatCollapsed)
+        <aside id="game-chat-sidebar" class="chat-sidebar @(_chatCollapsed ? "is-collapsed" : "")" aria-label="Chat">
+            <div class="chat-sidebar-header">
+                @if (!_chatCollapsed)
                 {
-                    <span class="chat-dock-tab-label" aria-hidden="true">Chat</span>
+                    <h2 id="chat-heading">Chat</h2>
                 }
-            </button>
+                <button type="button" class="chat-collapse-button" @onclick="ToggleChatCollapsed"
+                        aria-label="@(_chatCollapsed ? "Expand chat" : "Collapse chat")"
+                        aria-expanded="@(!_chatCollapsed)" title="@(_chatCollapsed ? "Expand chat" : "Collapse chat")">
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none"
+                         stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                        <path d="M10 4v16"></path>
+                        <path d="@(_chatCollapsed ? "M14 9l3 3-3 3" : "M18 9l-3 3 3 3")"></path>
+                    </svg>
+                </button>
+            </div>
             @if (!_chatCollapsed)
             {
-                <div id="table-chat-content" class="chat-dock-body">
-                    <div class="chat-panel-header">
-                        <h2 id="chat-heading">Table chat</h2>
-                        <p>Talk with players and spectators</p>
+                <div id="chat-sidebar-content" class="chat-sidebar-content">
+                    <div class="chat-messages" @ref="_chatMessagesElement" role="log"
+                         aria-live="polite" aria-relevant="additions" aria-label="Messages">
+                        @foreach (var message in _game.ChatMessages)
+                        {
+                            <p class="chat-message"><strong class="chat-sender chat-name-@(message.ColorIndex)">@message.Sender:</strong> @message.Text</p>
+                        }
                     </div>
-                <div class="chat-messages" @ref="_chatMessagesElement" role="log"
-                     aria-live="polite" aria-relevant="additions">
-                    @if (_game.ChatMessages.Count == 0)
-                    {
-                        <p class="muted">No messages yet. Say hello!</p>
-                    }
-                    @foreach (var message in _game.ChatMessages)
-                    {
-                        <p class="chat-message"><strong class="chat-sender chat-name-@(message.ColorIndex)">@message.Sender:</strong> @message.Text</p>
-                    }
-                </div>
-                <form class="chat-form" @onsubmit="SendChat" @onsubmit:preventDefault>
-                    <div class="chat-composer-meta">
-                        <label for="chat-input">Message</label>
-                        <span id="chat-character-count" class="chat-character-count @(_chatText.Length >= GameService.MaxChatLength ? "is-full" : "")">
-                            @($"{_chatText.Length}/{GameService.MaxChatLength}")
-                        </span>
-                    </div>
-                    @if (!string.IsNullOrWhiteSpace(_chatNotice) || _chatText.Length >= GameService.MaxChatLength)
-                    {
-                        <div class="chat-limit-card" role="status" aria-live="polite">
-                            <span class="chat-limit-icon" aria-hidden="true">♥</span>
-                            <div>
-                                <strong>@(string.IsNullOrWhiteSpace(_chatNotice) ? "Message limit reached!" : "Quick chat tip!")</strong>
-                                <p>@(_chatNotice ?? "That's 200 characters! Send your message or shorten it to keep typing.")</p>
+                    <form class="chat-form" @onsubmit="SendChat" @onsubmit:preventDefault>
+                        @if (!string.IsNullOrWhiteSpace(_chatNotice) || _chatText.Length >= GameService.MaxChatLength)
+                        {
+                            <div class="chat-limit-card" role="status" aria-live="polite">
+                                <span class="chat-limit-icon" aria-hidden="true">♥</span>
+                                <div>
+                                    <strong>@(string.IsNullOrWhiteSpace(_chatNotice) ? "Message limit reached!" : "Quick chat tip!")</strong>
+                                    <p>@(_chatNotice ?? "That is 200 characters! Send your message or shorten it to keep typing.")</p>
+                                </div>
                             </div>
+                        }
+                        <div class="chat-composer-row">
+                            <input id="chat-input" class="input" @bind="_chatText" @bind:event="oninput"
+                                   @bind:after="ClearChatNotice" maxlength="@GameService.MaxChatLength"
+                                   aria-label="Chat message" autocomplete="off" placeholder="Message..." />
+                            <button type="submit" class="btn btn-primary"
+                                    disabled="@string.IsNullOrWhiteSpace(_chatText)">Send</button>
                         </div>
-                    }
-                    <input id="chat-input" class="input" @bind="_chatText" @bind:event="oninput"
-                           @bind:after="ClearChatNotice" maxlength="@GameService.MaxChatLength"
-                           aria-describedby="chat-character-count" autocomplete="off" placeholder="Message your table..." />
-                    <button type="submit" class="btn btn-primary"
-                            disabled="@string.IsNullOrWhiteSpace(_chatText)">Send</button>
-                </form>
+                        @if (_chatText.Length > 0)
+                        {
+                            <span class="chat-character-count @(_chatText.Length >= GameService.MaxChatLength ? "is-full" : "")">
+                                @($"{_chatText.Length}/{GameService.MaxChatLength}")
+                            </span>
+                        }
+                    </form>
                 </div>
             }
         </aside>
