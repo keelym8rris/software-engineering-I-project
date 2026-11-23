@@ -15,7 +15,7 @@ public class GameService
     // Maps connectionId -> gameId for fast disconnect lookup
     private readonly Dictionary<string, string> _connectionIndex = new();
 
-    public string CreateGame(string hostConnectionId, string hostName, GameMode mode)
+    public string CreateGame(string hostConnectionId, string hostName, GameMode mode, string? hostAvatar = null)
     {
         if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
 
@@ -25,7 +25,7 @@ public class GameService
             while (_games.ContainsKey(game.GameId))
                 game.GameId = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
 
-            game.Players.Add(new Player { ConnectionId = hostConnectionId, Name = hostName });
+            game.Players.Add(new Player { ConnectionId = hostConnectionId, Name = hostName, Avatar = hostAvatar });
             _games.Add(game.GameId, game);
             try
             {
@@ -57,11 +57,23 @@ public class GameService
         }
     }
 
-    public bool TryJoinGame(string gameId, string connectionId, string name, string? priorConnectionId, out string error)
+    public const int MaxPlayers = 6;
+
+    public bool TryJoinGame(string gameId, string connectionId, string name, string? priorConnectionId, out string error) =>
+        TryJoinGame(gameId, connectionId, name, priorConnectionId, null, out error);
+
+    public bool TryJoinGame(
+        string gameId,
+        string connectionId,
+        string name,
+        string? priorConnectionId,
+        string? playerAvatar,
+        out string error)
     {
         lock (_sync)
         {
             error = "";
+
             if (!_games.TryGetValue(gameId, out var game))
             {
                 error = "No lobby found with that code. Check it and try again.";
@@ -74,6 +86,7 @@ public class GameService
             var returningSpectator = priorConnectionId == null
                 ? null
                 : game.Spectators.FirstOrDefault(s => s.ConnectionId == priorConnectionId);
+
             if (returningSpectator != null)
             {
                 _connectionIndex.Remove(returningSpectator.ConnectionId);
@@ -90,28 +103,39 @@ public class GameService
                 if (game.ChatSenderColors.Remove(returningPlayer.ConnectionId, out var existingColor))
                     game.ChatSenderColors[connectionId] = existingColor;
                 returningPlayer.ConnectionId = connectionId;
+                if (!string.IsNullOrWhiteSpace(playerAvatar))
+                    returningPlayer.Avatar = playerAvatar;
                 _connectionIndex[connectionId] = gameId;
                 if (game.HostConnectionId == priorConnectionId)
                     game.HostConnectionId = connectionId;
                 return true;
             }
 
-            if (game.Players.Any(p => p.ConnectionId == connectionId))
-                return true;
-
+            // A brand-new player.
             if (game.Mode == GameMode.Solo)
             {
-                error = "This table is for solo play. Start your own solo game from the play menu.";
+                error = "That table is a solo game and can't be joined.";
                 return false;
             }
 
-            if (game.Phase != GamePhase.Lobby || game.Players.Count >= 6)
+            if (game.Phase != GamePhase.Lobby)
             {
-                error = "Cannot join this game. It may be full or already started.";
+                error = "That game has already started. Ask the host to start a new table.";
                 return false;
             }
 
-            game.Players.Add(new Player { ConnectionId = connectionId, Name = name });
+            if (game.Players.Count >= MaxPlayers)
+            {
+                error = "That lobby is full.";
+                return false;
+            }
+
+            game.Players.Add(new Player
+            {
+                ConnectionId = connectionId,
+                Name = name,
+                Avatar = string.IsNullOrWhiteSpace(playerAvatar) ? null : playerAvatar
+            });
             _connectionIndex[connectionId] = gameId;
             return true;
         }
@@ -434,6 +458,7 @@ public class GameService
     {
         ConnectionId = player.ConnectionId,
         Name = player.Name,
+        Avatar = player.Avatar,
         Chips = player.Chips,
         CurrentBet = player.CurrentBet,
         HandValue = hideHoleCard ? 0 : player.HandValue,

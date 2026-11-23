@@ -6,6 +6,9 @@ public class Player
 {
     public string ConnectionId { get; set; } = "";
     public string Name { get; set; } = "";
+
+    // Custom player icon (Base64 image data URL)
+    public string? Avatar { get; set; }
     public List<Card> Hand { get; set; } = new();
     public PlayerStatus Status { get; set; } = PlayerStatus.Waiting;
     public decimal Chips { get; set; } = 1000m;

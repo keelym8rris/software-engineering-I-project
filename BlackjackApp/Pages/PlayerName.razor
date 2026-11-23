@@ -1,31 +1,102 @@
+
 @page "/player-name"
+@using Microsoft.AspNetCore.Components.Forms
+@using BlackjackApp.Models
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<PageTitle>Blackjack | Change player name</PageTitle>
+<PageTitle>Blackjack | Player Settings</PageTitle>
 
 <main class="name-settings">
     <a class="lobby-home-link" href="/">← Back to home</a>
+
     <p class="home-eyebrow">PLAYER SETTINGS</p>
-    <h1>Change player name</h1>
-    <p class="name-settings-intro">Choose the name other players will see at the table.</p>
+    <h1>Player Settings</h1>
+    <p class="name-settings-intro">
+        Customize your player name and icon.
+    </p>
 
     @if (!_loaded)
     {
-        <p class="status">Loading player name...</p>
+        <p class="status">Loading player settings...</p>
     }
     else
     {
-        <form class="name-settings-panel" @onsubmit="SaveName" @onsubmit:preventDefault>
+        <form class="name-settings-panel"
+              @onsubmit="SaveSettings"
+              @onsubmit:preventDefault>
+
             <label for="player-name">Player name</label>
-            <input id="player-name" class="input" @bind="_playerName" maxlength="20"
-                   autocomplete="nickname" placeholder="Enter your name" />
+
+            <input id="player-name"
+                   class="input"
+                   @bind="_playerName"
+                   maxlength="20"
+                   autocomplete="nickname"
+                   placeholder="Enter your name" />
+
+            <div class="avatar-settings">
+                <label>Player Icon</label>
+
+                @if (!string.IsNullOrWhiteSpace(_playerAvatar))
+                {
+                    <img src="@_playerAvatar"
+                         class="player-avatar-preview"
+                         alt="Player avatar preview" />
+                }
+                else
+                {
+                    <div class="player-avatar-placeholder avatar-preview-placeholder">
+                        @(_playerName.Length > 0
+                            ? _playerName[..1].ToUpperInvariant()
+                            : "?")
+                    </div>
+                }
+
+                <InputFile id="avatar-upload"
+                           accept="image/png,image/jpeg,image/webp,image/gif"
+                           OnChange="HandleAvatarUpload" />
+
+                <p class="muted">
+                    Upload a PNG, JPG, WEBP, or GIF image.
+                    Maximum size: 5 MB. It is cropped to a small square.
+                </p>
+
+                <p class="muted">Or choose a premade icon:</p>
+
+                <div class="avatar-choices">
+                    @foreach (var option in PremadeAvatars.All)
+                    {
+                        <button type="button"
+                                class="avatar-choice @(_playerAvatar == option.Path ? "selected" : "")"
+                                title="@option.Label"
+                                aria-label="@option.Label"
+                                aria-pressed="@(_playerAvatar == option.Path ? "true" : "false")"
+                                @onclick="() => SelectPremadeAvatar(option.Path)">
+                            <img src="@option.Path" alt="" />
+                        </button>
+                    }
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_playerAvatar))
+                {
+                    <button type="button"
+                            class="btn btn-secondary"
+                            @onclick="RemoveAvatar">
+                        Remove Icon
+                    </button>
+                }
+            </div>
+
             @if (!string.IsNullOrEmpty(_error))
             {
                 <p class="error" role="alert">@_error</p>
             }
-            <button class="btn btn-primary" type="submit" disabled="@string.IsNullOrWhiteSpace(_playerName)">
-                Save name
+
+            <button class="btn btn-primary"
+                    type="submit"
+                    disabled="@string.IsNullOrWhiteSpace(_playerName)">
+                Save Settings
             </button>
         </form>
     }
@@ -33,29 +104,125 @@
 
 @code {
     private const string PlayerNameStorageKey = "blackjack.playerName";
+    private const string PlayerAvatarStorageKey = "blackjack.playerAvatar";
+
+    private const long MaxAvatarSize = 5_000_000;
+
     private string _playerName = "";
+    private string? _playerAvatar;
     private string _error = "";
     private bool _loaded;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        if (!firstRender)
+            return;
 
-        _playerName = await JS.InvokeAsync<string?>("localStorage.getItem", PlayerNameStorageKey) ?? "";
+        _playerName = await JS.InvokeAsync<string?>(
+            "localStorage.getItem",
+            PlayerNameStorageKey) ?? "";
+
+        try
+        {
+            _playerAvatar = await JS.InvokeAsync<string?>("blackjackAvatar.get");
+        }
+        catch (Exception ex) when (ex is JSException || ex is InvalidOperationException || ex is TaskCanceledException)
+        {
+            _playerAvatar = null;
+        }
+
         _loaded = true;
+
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task SaveName()
+    private async Task HandleAvatarUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        _error = "";
+
+        string[] allowedTypes =
+        {
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/gif"
+        };
+
+        if (!allowedTypes.Contains(file.ContentType.ToLowerInvariant()))
+        {
+            _error = "Please upload a PNG, JPG, WEBP, or GIF image.";
+            return;
+        }
+
+        if (file.Size > MaxAvatarSize)
+        {
+            _error = "Image must be smaller than 5 MB.";
+            return;
+        }
+
+        try
+        {
+            // The browser shrinks the image to a small square, so only a few KB
+            // ever travel over the Blazor connection (it drops messages over 32 KB).
+            var resized = await JS.InvokeAsync<string?>("blackjackAvatar.fromInput", "avatar-upload");
+
+            if (string.IsNullOrWhiteSpace(resized))
+            {
+                _error = "Could not use this image. Please try another.";
+                return;
+            }
+
+            _playerAvatar = resized;
+        }
+        catch (Exception)
+        {
+            _error = "Could not upload this image. Please try another.";
+        }
+    }
+
+    private void SelectPremadeAvatar(string path)
+    {
+        _playerAvatar = path;
+        _error = "";
+    }
+
+    private void RemoveAvatar()
+    {
+        _playerAvatar = null;
+        _error = "";
+    }
+
+    private async Task SaveSettings()
     {
         var name = _playerName.Trim();
+
         if (string.IsNullOrWhiteSpace(name))
         {
             _error = "Enter a name before saving.";
             return;
         }
 
-        await JS.InvokeVoidAsync("localStorage.setItem", PlayerNameStorageKey, name);
+        await JS.InvokeVoidAsync(
+            "localStorage.setItem",
+            PlayerNameStorageKey,
+            name);
+
+        if (string.IsNullOrWhiteSpace(_playerAvatar))
+        {
+            await JS.InvokeVoidAsync(
+                "localStorage.removeItem",
+                PlayerAvatarStorageKey);
+        }
+        else
+        {
+            await JS.InvokeVoidAsync(
+                "localStorage.setItem",
+                PlayerAvatarStorageKey,
+                _playerAvatar);
+        }
+
         Nav.NavigateTo("/");
     }
 }
