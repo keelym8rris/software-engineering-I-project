@@ -236,12 +236,6 @@
                             <button type="submit" class="btn btn-primary"
                                     disabled="@string.IsNullOrWhiteSpace(_chatText)">Send</button>
                         </div>
-                        @if (_chatText.Length > 0)
-                        {
-                            <span class="chat-character-count @(_chatText.Length >= GameService.MaxChatLength ? "is-full" : "")">
-                                @($"{_chatText.Length}/{GameService.MaxChatLength}")
-                            </span>
-                        }
                     </form>
                 </div>
             }
